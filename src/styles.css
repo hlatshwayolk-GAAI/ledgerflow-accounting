@@ -1,0 +1,226 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.992 0.002 247);
+  --foreground: oklch(0.20 0.03 257);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.20 0.03 257);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.20 0.03 257);
+  --primary: oklch(0.62 0.18 257);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.01 256);
+  --secondary-foreground: oklch(0.25 0.03 257);
+  --muted: oklch(0.965 0.008 256);
+  --muted-foreground: oklch(0.52 0.02 256);
+  --accent: oklch(0.95 0.02 256);
+  --accent-foreground: oklch(0.30 0.05 257);
+  --destructive: oklch(0.60 0.22 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.65 0.16 155);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.75 0.15 75);
+  --warning-foreground: oklch(0.20 0.05 75);
+  --border: oklch(0.92 0.01 256);
+  --input: oklch(0.93 0.01 256);
+  --ring: oklch(0.62 0.18 257);
+  --chart-1: oklch(0.62 0.18 257);
+  --chart-2: oklch(0.65 0.16 155);
+  --chart-3: oklch(0.75 0.15 75);
+  --chart-4: oklch(0.60 0.22 27);
+  --chart-5: oklch(0.52 0.10 290);
+  --sidebar: oklch(0.985 0.003 256);
+  --sidebar-foreground: oklch(0.25 0.03 257);
+  --sidebar-primary: oklch(0.62 0.18 257);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.95 0.02 256);
+  --sidebar-accent-foreground: oklch(0.30 0.05 257);
+  --sidebar-border: oklch(0.92 0.01 256);
+  --sidebar-ring: oklch(0.62 0.18 257);
+}
+
+/* ── Animated auth background ─────────────────────────────────────────── */
+@keyframes auth-drift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes auth-orb-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(40px, -30px) scale(1.1); }
+  66%       { transform: translate(-20px, 20px) scale(0.95); }
+}
+
+@keyframes auth-orb-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(-50px, 25px) scale(1.08); }
+  66%       { transform: translate(30px, -15px) scale(0.97); }
+}
+
+.auth-bg {
+  position: relative;
+  background: oklch(0.97 0.008 250);
+  overflow: hidden;
+}
+
+.auth-bg::before,
+.auth-bg::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.auth-bg::before {
+  width: 600px;
+  height: 600px;
+  top: -150px;
+  right: -100px;
+  background: radial-gradient(circle, oklch(0.72 0.18 257) 0%, transparent 70%);
+  animation: auth-orb-1 12s ease-in-out infinite;
+}
+
+.auth-bg::after {
+  width: 500px;
+  height: 500px;
+  bottom: -100px;
+  left: -80px;
+  background: radial-gradient(circle, oklch(0.72 0.18 290) 0%, transparent 70%);
+  animation: auth-orb-2 15s ease-in-out infinite;
+}
+
+/* ── Glassmorphism auth card ──────────────────────────────────────────── */
+.auth-card {
+  position: relative;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.80);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.05),
+    0 20px 60px -10px rgba(99, 102, 241, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* ── Auth input enhancements ─────────────────────────────────────────── */
+.auth-input {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.auth-input:focus {
+  background: white;
+  box-shadow: 0 0 0 3px oklch(0.62 0.18 257 / 0.12);
+}
+
+/* ── Auth label with icon ─────────────────────────────────────────────── */
+.auth-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+/* ── Google button hover lift ─────────────────────────────────────────── */
+.auth-google-btn {
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.auth-google-btn:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  transform: translateY(-1px);
+}
+
+/* ── Submit button shimmer ────────────────────────────────────────────── */
+.auth-submit-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.auth-submit-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+  transform: translateX(-100%);
+  transition: transform 0.5s ease;
+}
+
+.auth-submit-btn:hover:not(:disabled)::after {
+  transform: translateX(100%);
+}
+
+.auth-submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px oklch(0.62 0.18 257 / 0.35);
+}
+
+/* ── Base ────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
