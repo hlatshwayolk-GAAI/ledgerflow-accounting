@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -101,18 +102,17 @@ function AuthPage() {
   /* ── Google OAuth — direct Supabase (works everywhere) ───────────── */
   const handleGoogle = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin + "/app/dashboard",
-        queryParams: { access_type: "offline", prompt: "consent" },
-      },
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin + "/auth",
     });
-    if (error) {
-      toast.error(friendlyError(error.message));
+    if (result?.error) {
+      toast.error(friendlyError(result.error.message));
       setLoading(false);
+      return;
     }
-    // On success the browser is redirected — no further action needed
+    if (!result?.redirected) {
+      navigate({ to: "/app/dashboard" });
+    }
   };
 
   /* ── "email sent" confirmation screen ────────────────────────────── */
