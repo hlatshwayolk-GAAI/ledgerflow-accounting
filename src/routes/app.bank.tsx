@@ -28,6 +28,7 @@ type BankTransaction = {
   status: "unreconciled" | "reconciled";
   reconciled_to_type: string | null;
   reconciled_to_id: string | null;
+  bank_account_id: string;
 };
 
 type Account = { id: string; code: string; name: string; type: string };
@@ -67,7 +68,7 @@ function BankReconciliationPage() {
       .select("id,date,description,reference,amount,status,reconciled_to_type,reconciled_to_id")
       .eq("company_id", active.id)
       .order("date", { ascending: false });
-    const txs = (data as BankTransaction[]) ?? [];
+    const txs = ((data as unknown) as BankTransaction[]) ?? [];
     setTransactions(txs);
     if (txs.length > 0 && !selectedTx) {
       setSelectedTx(txs[0]);
@@ -112,7 +113,7 @@ function BankReconciliationPage() {
           .eq("company_id", active.id)
           .neq("status", "paid");
 
-        const matches = (invoices ?? []).filter(inv => {
+        const matches = ((invoices as any[]) ?? []).filter((inv: any) => {
           const remaining = Number(inv.total) - Number(inv.amount_paid);
           // Match by amount
           const amountMatch = Math.abs(remaining - targetAmount) < 0.01;
@@ -135,7 +136,7 @@ function BankReconciliationPage() {
           .eq("company_id", active.id)
           .neq("status", "paid");
 
-        const matches = (bills ?? []).filter(bill => {
+        const matches = ((bills as any[]) ?? []).filter((bill: any) => {
           const remaining = Number(bill.total) - Number(bill.amount_paid);
           const amountMatch = Math.abs(remaining - targetAmount) < 0.01;
           const textMatch = selectedTx.description.toLowerCase().includes(bill.bill_number.toLowerCase()) ||
