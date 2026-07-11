@@ -49,6 +49,116 @@ export type Database = {
           },
         ]
       }
+      bill_lines: {
+        Row: {
+          bill_id: string
+          created_at: string
+          description: string
+          id: string
+          line_total: number
+          position: number
+          quantity: number
+          tax_rate: number
+          unit_price: number
+        }
+        Insert: {
+          bill_id: string
+          created_at?: string
+          description?: string
+          id?: string
+          line_total?: number
+          position?: number
+          quantity?: number
+          tax_rate?: number
+          unit_price?: number
+        }
+        Update: {
+          bill_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+          line_total?: number
+          position?: number
+          quantity?: number
+          tax_rate?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bill_lines_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bills: {
+        Row: {
+          amount_paid: number
+          bill_number: string
+          company_id: string
+          created_at: string
+          due_date: string
+          id: string
+          issue_date: string
+          notes: string | null
+          status: string
+          subtotal: number
+          supplier_id: string
+          tax_total: number
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          amount_paid?: number
+          bill_number: string
+          company_id: string
+          created_at?: string
+          due_date: string
+          id?: string
+          issue_date: string
+          notes?: string | null
+          status?: string
+          subtotal?: number
+          supplier_id: string
+          tax_total?: number
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          amount_paid?: number
+          bill_number?: string
+          company_id?: string
+          created_at?: string
+          due_date?: string
+          id?: string
+          issue_date?: string
+          notes?: string | null
+          status?: string
+          subtotal?: number
+          supplier_id?: string
+          tax_total?: number
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bills_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bills_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           created_at: string
@@ -394,6 +504,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_bill_with_journal: {
+        Args: {
+          _bill_number: string
+          _company_id: string
+          _due_date: string
+          _expense_code?: string
+          _issue_date: string
+          _lines: Json
+          _notes: string
+          _supplier_id: string
+        }
+        Returns: string
+      }
       create_invoice_with_journal: {
         Args: {
           _company_id: string
@@ -410,9 +533,20 @@ export type Database = {
         Args: { _invoice_id: string }
         Returns: undefined
       }
+      delete_unpaid_bill: { Args: { _bill_id: string }; Returns: undefined }
       is_company_member: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
+      }
+      record_bill_payment: {
+        Args: {
+          _amount: number
+          _bank_account_code?: string
+          _bill_id: string
+          _notes?: string
+          _payment_date: string
+        }
+        Returns: string
       }
       record_invoice_payment: {
         Args: {
