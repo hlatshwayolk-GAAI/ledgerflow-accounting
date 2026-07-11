@@ -28,6 +28,7 @@ type BankTransaction = {
   status: "unreconciled" | "reconciled";
   reconciled_to_type: string | null;
   reconciled_to_id: string | null;
+  bank_account_id: string;
 };
 
 type Account = { id: string; code: string; name: string; type: string };
