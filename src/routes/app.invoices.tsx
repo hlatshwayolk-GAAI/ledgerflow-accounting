@@ -45,7 +45,7 @@ function InvoicesPage() {
       .order("issue_date", { ascending: false });
     setInvoices(data ?? []);
     const { data: cs } = await supabase.from("customers").select("id,name,email").eq("company_id", active.id).order("name");
-    setCustomers(cs ?? []);
+    setCustomers((cs ?? []).map(c => ({ id: c.id, name: c.name, email: c.email ?? undefined })));
   };
 
   useEffect(() => { load(); }, [active?.id]);
