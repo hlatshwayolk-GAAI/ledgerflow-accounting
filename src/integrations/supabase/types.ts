@@ -7,6 +7,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -47,113 +49,10 @@ export type Database = {
           },
         ]
       }
-      bank_accounts: {
-        Row: {
-          account_id: string
-          account_number: string | null
-          bank_name: string | null
-          company_id: string
-          created_at: string
-          id: string
-          name: string
-        }
-        Insert: {
-          account_id: string
-          account_number?: string | null
-          bank_name?: string | null
-          company_id: string
-          created_at?: string
-          id?: string
-          name: string
-        }
-        Update: {
-          account_id?: string
-          account_number?: string | null
-          bank_name?: string | null
-          company_id?: string
-          created_at?: string
-          id?: string
-          name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bank_accounts_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bank_accounts_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      bank_transactions: {
-        Row: {
-          amount: number
-          bank_account_id: string | null
-          company_id: string
-          created_at: string
-          date: string
-          description: string
-          id: string
-          reconciled_to_id: string | null
-          reconciled_to_type: string | null
-          reference: string | null
-          status: string
-        }
-        Insert: {
-          amount: number
-          bank_account_id?: string | null
-          company_id: string
-          created_at?: string
-          date: string
-          description: string
-          id?: string
-          reconciled_to_id?: string | null
-          reconciled_to_type?: string | null
-          reference?: string | null
-          status?: string
-        }
-        Update: {
-          amount?: number
-          bank_account_id?: string | null
-          company_id?: string
-          created_at?: string
-          date?: string
-          description?: string
-          id?: string
-          reconciled_to_id?: string | null
-          reconciled_to_type?: string | null
-          reference?: string | null
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bank_transactions_bank_account_id_fkey"
-            columns: ["bank_account_id"]
-            isOneToOne: false
-            referencedRelation: "bank_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bank_transactions_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       bill_lines: {
         Row: {
-          account_id: string
           bill_id: string
-          created_at?: string
+          created_at: string
           description: string
           id: string
           line_total: number
@@ -163,10 +62,9 @@ export type Database = {
           unit_price: number
         }
         Insert: {
-          account_id: string
           bill_id: string
           created_at?: string
-          description: string
+          description?: string
           id?: string
           line_total?: number
           position?: number
@@ -175,7 +73,6 @@ export type Database = {
           unit_price?: number
         }
         Update: {
-          account_id?: string
           bill_id?: string
           created_at?: string
           description?: string
@@ -187,13 +84,6 @@ export type Database = {
           unit_price?: number
         }
         Relationships: [
-          {
-            foreignKeyName: "bill_lines_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "bill_lines_bill_id_fkey"
             columns: ["bill_id"]
@@ -213,7 +103,7 @@ export type Database = {
           id: string
           issue_date: string
           notes: string | null
-          status: Database["public"]["Enums"]["invoice_status"]
+          status: string
           subtotal: number
           supplier_id: string
           tax_total: number
@@ -225,11 +115,11 @@ export type Database = {
           bill_number: string
           company_id: string
           created_at?: string
-          due_date?: string
+          due_date: string
           id?: string
-          issue_date?: string
+          issue_date: string
           notes?: string | null
-          status?: Database["public"]["Enums"]["invoice_status"]
+          status?: string
           subtotal?: number
           supplier_id: string
           tax_total?: number
@@ -245,7 +135,7 @@ export type Database = {
           id?: string
           issue_date?: string
           notes?: string | null
-          status?: Database["public"]["Enums"]["invoice_status"]
+          status?: string
           subtotal?: number
           supplier_id?: string
           tax_total?: number
@@ -535,7 +425,6 @@ export type Database = {
           description: string
           entry_date: string
           id: string
-          reference: string | null
           source_id: string | null
           source_type: string | null
         }
@@ -546,7 +435,6 @@ export type Database = {
           description: string
           entry_date?: string
           id?: string
-          reference?: string | null
           source_id?: string | null
           source_type?: string | null
         }
@@ -557,7 +445,6 @@ export type Database = {
           description?: string
           entry_date?: string
           id?: string
-          reference?: string | null
           source_id?: string | null
           source_type?: string | null
         }
@@ -642,20 +529,6 @@ export type Database = {
         }
         Returns: string
       }
-      create_manual_journal: {
-        Args: {
-          _company_id: string
-          _entry_date: string
-          _description: string
-          _reference?: string | null
-          _lines: Json
-        }
-        Returns: string
-      }
-      delete_draft_bill: {
-        Args: { _bill_id: string }
-        Returns: undefined
-      }
       delete_draft_invoice: {
         Args: { _invoice_id: string }
         Returns: undefined
@@ -684,14 +557,6 @@ export type Database = {
           _payment_date: string
         }
         Returns: string
-      }
-      reverse_bill_payment: {
-        Args: { _bill_id: string }
-        Returns: undefined
-      }
-      reverse_invoice_payment: {
-        Args: { _invoice_id: string }
-        Returns: undefined
       }
     }
     Enums: {
@@ -724,12 +589,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -753,11 +618,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -778,11 +643,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -803,11 +668,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -820,11 +685,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
