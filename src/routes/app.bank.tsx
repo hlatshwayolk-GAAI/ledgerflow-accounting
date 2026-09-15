@@ -23,7 +23,6 @@ type BankAccount = { id: string; name: string; bank_name: string; account_number
 
 type BankTransaction = {
   id: string;
-  bank_account_id?: string | null;
   date: string;
   description: string;
   reference: string | null;
