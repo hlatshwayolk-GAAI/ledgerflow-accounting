@@ -53,8 +53,8 @@ if (!$isHealthy) {
         Start-Sleep -Milliseconds 600
     }
 
-    # Start the dev server in the background and log output
-    Start-Process "cmd.exe" -ArgumentList "/c npm run dev -- --port $port > `"$logPath`" 2>&1" -WorkingDirectory $projectDir -WindowStyle Hidden
+    # Start the dev server in the background
+    Start-Process powershell.exe -ArgumentList "-WindowStyle Hidden -NoProfile -Command Set-Location '$projectDir'; npm run dev -- --port $port --host 127.0.0.1 > '$logPath' 2>&1" -WorkingDirectory $projectDir
 
     # Wait for the server to become healthy (up to 30 seconds, polling every 500ms)
     $maxAttempts = 60

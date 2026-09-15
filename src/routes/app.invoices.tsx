@@ -450,40 +450,107 @@ function InvoicesPage() {
 
       {/* Payment Dialog */}
       <Dialog open={!!payInv} onOpenChange={(o) => !o && setPayInv(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Record payment</DialogTitle></DialogHeader>
-          {payInv && (
-            <form onSubmit={submitPayment} className="space-y-4">
-              <div className="rounded-lg bg-muted/40 p-3 text-sm flex justify-between">
-                <div>
-                  <div className="font-medium">{payInv.invoice_number}</div>
-                  <div className="text-muted-foreground">{payInv.customer?.name ?? "—"}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-muted-foreground text-xs">Outstanding</div>
-                  <div className="font-medium tabular-nums">
-                    {formatMoney(Number(payInv.total) - Number(payInv.amount_paid), active.currency)}
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Record Payment for {payInv?.invoice_number}</DialogTitle></DialogHeader>
+          {payInv && (() => {
+            const outstanding = Math.max(0, Number(payInv.total) - Number(payInv.amount_paid));
+            const currentAmount = Number(payAmount) || 0;
+            const remainingAfterPayment = Math.max(0, outstanding - currentAmount);
+            const willFullyPay = currentAmount >= outstanding - 0.005;
+
+            return (
+              <form onSubmit={submitPayment} className="space-y-4 pt-1">
+                <div className="rounded-lg bg-muted/40 p-3.5 text-sm flex justify-between items-center border">
+                  <div>
+                    <div className="font-semibold text-foreground">{payInv.invoice_number}</div>
+                    <div className="text-xs text-muted-foreground">{payInv.customer?.name ?? "Customer"}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-muted-foreground">Current Outstanding</div>
+                    <div className="font-semibold tabular-nums text-foreground">
+                      {formatMoney(outstanding, active.currency)}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Amount</Label>
-                  <Input type="number" step="0.01" min="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} className="mt-1" required />
+
+                {/* Quick Payment Preset Buttons */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Payment Type</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={willFullyPay ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setPayAmount(outstanding.toFixed(2))}
+                      className="w-full text-xs font-medium"
+                    >
+                      Pay Full ({formatMoney(outstanding, active.currency)})
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={!willFullyPay ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setPayAmount((outstanding / 2).toFixed(2))}
+                      className="w-full text-xs font-medium"
+                    >
+                      Partial (50%)
+                    </Button>
+                  </div>
                 </div>
-                <div>
-                  <Label>Payment date</Label>
-                  <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} className="mt-1" required />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Amount to Pay</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      max={outstanding}
+                      value={payAmount}
+                      onChange={(e) => setPayAmount(e.target.value)}
+                      className="mt-1 font-mono font-medium"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label>Payment Date</Label>
+                    <Input
+                      type="date"
+                      value={payDate}
+                      onChange={(e) => setPayDate(e.target.value)}
+                      className="mt-1"
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Posts a balanced journal: <span className="font-mono">Dr Bank · Cr Accounts Receivable</span>.
-              </p>
-              <DialogFooter>
-                <Button type="submit" disabled={paying}>{paying ? "Posting…" : "Record payment"}</Button>
-              </DialogFooter>
-            </form>
-          )}
+
+                {/* Dynamic Remaining Balance calculation card */}
+                <div className="rounded-lg border bg-card p-3 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Balance after payment:</span>
+                    <span className={`font-semibold tabular-nums ${remainingAfterPayment <= 0.005 ? "text-success" : "text-foreground"}`}>
+                      {formatMoney(remainingAfterPayment, active.currency)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 border-t">
+                    <span className="text-muted-foreground">Updated Status:</span>
+                    <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${willFullyPay ? "bg-success/15 text-success border border-success/30" : "bg-warning/15 text-warning border border-warning/30"}`}>
+                      {willFullyPay ? "PAID IN FULL" : "PARTIALLY PAID"}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Posts a double-entry journal: <span className="font-mono">Dr Bank (1000) · Cr Accounts Receivable (1100)</span>.
+                </p>
+
+                <DialogFooter className="pt-2">
+                  <Button type="button" variant="ghost" onClick={() => setPayInv(null)}>Cancel</Button>
+                  <Button type="submit" disabled={paying}>{paying ? "Recording…" : "Confirm Payment"}</Button>
+                </DialogFooter>
+              </form>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

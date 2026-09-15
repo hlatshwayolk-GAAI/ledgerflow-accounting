@@ -16,6 +16,8 @@ import {
   Menu,
   X,
   Scroll,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -37,6 +39,8 @@ const navItems = [
   { to: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/app/invoices", label: "Invoices", icon: FileText },
   { to: "/app/bills", label: "Bills", icon: Receipt },
+  { to: "/app/receivables", label: "Receivables (A/R)", icon: TrendingUp },
+  { to: "/app/payables", label: "Payables (A/P)", icon: TrendingDown },
   { to: "/app/customers", label: "Customers", icon: Users },
   { to: "/app/suppliers", label: "Suppliers", icon: Truck },
   { to: "/app/bank", label: "Banking & Reconcile", icon: Landmark },

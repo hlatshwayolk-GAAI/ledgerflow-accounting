@@ -14,6 +14,8 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppSuppliersRouteImport } from './routes/app.suppliers'
 import { Route as AppReportsRouteImport } from './routes/app.reports'
+import { Route as AppReceivablesRouteImport } from './routes/app.receivables'
+import { Route as AppPayablesRouteImport } from './routes/app.payables'
 import { Route as AppOnboardingRouteImport } from './routes/app.onboarding'
 import { Route as AppJournalsRouteImport } from './routes/app.journals'
 import { Route as AppInvoicesRouteImport } from './routes/app.invoices'
@@ -46,6 +48,16 @@ const AppSuppliersRoute = AppSuppliersRouteImport.update({
 const AppReportsRoute = AppReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReceivablesRoute = AppReceivablesRouteImport.update({
+  id: '/receivables',
+  path: '/receivables',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPayablesRoute = AppPayablesRouteImport.update({
+  id: '/payables',
+  path: '/payables',
   getParentRoute: () => AppRoute,
 } as any)
 const AppOnboardingRoute = AppOnboardingRouteImport.update({
@@ -101,6 +113,8 @@ export interface FileRoutesByFullPath {
   '/app/invoices': typeof AppInvoicesRoute
   '/app/journals': typeof AppJournalsRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/app/payables': typeof AppPayablesRoute
+  '/app/receivables': typeof AppReceivablesRoute
   '/app/reports': typeof AppReportsRoute
   '/app/suppliers': typeof AppSuppliersRoute
 }
@@ -116,6 +130,8 @@ export interface FileRoutesByTo {
   '/app/invoices': typeof AppInvoicesRoute
   '/app/journals': typeof AppJournalsRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/app/payables': typeof AppPayablesRoute
+  '/app/receivables': typeof AppReceivablesRoute
   '/app/reports': typeof AppReportsRoute
   '/app/suppliers': typeof AppSuppliersRoute
 }
@@ -132,6 +148,8 @@ export interface FileRoutesById {
   '/app/invoices': typeof AppInvoicesRoute
   '/app/journals': typeof AppJournalsRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/app/payables': typeof AppPayablesRoute
+  '/app/receivables': typeof AppReceivablesRoute
   '/app/reports': typeof AppReportsRoute
   '/app/suppliers': typeof AppSuppliersRoute
 }
@@ -149,6 +167,8 @@ export interface FileRouteTypes {
     | '/app/invoices'
     | '/app/journals'
     | '/app/onboarding'
+    | '/app/payables'
+    | '/app/receivables'
     | '/app/reports'
     | '/app/suppliers'
   fileRoutesByTo: FileRoutesByTo
@@ -164,6 +184,8 @@ export interface FileRouteTypes {
     | '/app/invoices'
     | '/app/journals'
     | '/app/onboarding'
+    | '/app/payables'
+    | '/app/receivables'
     | '/app/reports'
     | '/app/suppliers'
   id:
@@ -179,6 +201,8 @@ export interface FileRouteTypes {
     | '/app/invoices'
     | '/app/journals'
     | '/app/onboarding'
+    | '/app/payables'
+    | '/app/receivables'
     | '/app/reports'
     | '/app/suppliers'
   fileRoutesById: FileRoutesById
@@ -224,6 +248,20 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/app/reports'
       preLoaderRoute: typeof AppReportsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/receivables': {
+      id: '/app/receivables'
+      path: '/receivables'
+      fullPath: '/app/receivables'
+      preLoaderRoute: typeof AppReceivablesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/payables': {
+      id: '/app/payables'
+      path: '/payables'
+      fullPath: '/app/payables'
+      preLoaderRoute: typeof AppPayablesRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/onboarding': {
@@ -294,6 +332,8 @@ interface AppRouteChildren {
   AppInvoicesRoute: typeof AppInvoicesRoute
   AppJournalsRoute: typeof AppJournalsRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
+  AppPayablesRoute: typeof AppPayablesRoute
+  AppReceivablesRoute: typeof AppReceivablesRoute
   AppReportsRoute: typeof AppReportsRoute
   AppSuppliersRoute: typeof AppSuppliersRoute
 }
@@ -307,6 +347,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppInvoicesRoute: AppInvoicesRoute,
   AppJournalsRoute: AppJournalsRoute,
   AppOnboardingRoute: AppOnboardingRoute,
+  AppPayablesRoute: AppPayablesRoute,
+  AppReceivablesRoute: AppReceivablesRoute,
   AppReportsRoute: AppReportsRoute,
   AppSuppliersRoute: AppSuppliersRoute,
 }
