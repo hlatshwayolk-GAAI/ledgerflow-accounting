@@ -82,7 +82,7 @@ function BankReconciliationPage() {
     } else {
       try {
         const { data } = await supabase
-          .from("bank_transactions")
+          .from("bank_transactions" as any)
           .select("id,bank_account_id,date,description,reference,amount,status,reconciled_to_type,reconciled_to_id")
           .eq("company_id", active.id)
           .order("date", { ascending: false });
