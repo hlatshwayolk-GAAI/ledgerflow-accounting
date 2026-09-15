@@ -30,6 +30,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+import { isDemoMode, disableDemoMode } from "@/lib/demo-workspace";
+import { Badge } from "@/components/ui/badge";
+
 const navItems = [
   { to: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/app/invoices", label: "Invoices", icon: FileText },
@@ -80,34 +83,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Only redirect once we are SURE there is no session
   useEffect(() => {
-    if (!loading && !user) navigate({ to: "/auth" });
+    if (!loading && !user && !isDemoMode()) navigate({ to: "/auth" });
   }, [loading, user, navigate]);
 
   useEffect(() => {
-    if (!companiesLoading && companies.length === 0 && !creating && pathname !== "/app/onboarding") {
+    if (!companiesLoading && companies.length === 0 && !creating && pathname !== "/app/onboarding" && !isDemoMode()) {
       navigate({ to: "/app/onboarding" });
     }
   }, [companiesLoading, companies.length, creating, pathname, navigate]);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    if (isDemoMode()) {
+      disableDemoMode();
+    } else {
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.warn("Sign out error:", e);
+      }
+    }
     navigate({ to: "/auth" });
   };
 
-  // Show skeleton while loading OR while we still don't have a user (prevents
-  // the flash of redirect before the session resolves)
-  if (loading || !user || companiesLoading) return <ShellSkeleton />;
+  // Show skeleton while loading OR while we still don't have a user
+  if (loading || (!user && !isDemoMode()) || companiesLoading) return <ShellSkeleton />;
 
   const SidebarContent = () => (
     <>
       {/* Logo */}
-      <div className="px-6 py-5 border-b">
+      <div className="px-6 py-5 border-b flex items-center justify-between">
         <Link to="/app/dashboard" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
           <div className="h-8 w-8 rounded-lg bg-primary grid place-items-center text-primary-foreground font-semibold shadow-sm shadow-primary/20">
             L
           </div>
           <span className="font-semibold text-foreground tracking-tight">LedgerFlow</span>
         </Link>
+        {isDemoMode() && (
+          <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 border border-amber-500/30">
+            Demo
+          </span>
+        )}
       </div>
 
       {/* Company switcher */}
@@ -164,10 +179,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="border-t p-3">
         <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-sidebar-accent/40 transition-colors">
           <div className="h-8 w-8 rounded-full bg-primary/15 grid place-items-center text-xs font-semibold text-primary shrink-0">
-            {user.email?.[0].toUpperCase()}
+            {user?.email?.[0]?.toUpperCase() ?? "U"}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium truncate text-foreground">{user.email}</p>
+            <p className="text-xs font-medium truncate text-foreground">{user?.email ?? "User"}</p>
             <p className="text-xs text-muted-foreground">My account</p>
           </div>
           <Button size="icon" variant="ghost" onClick={handleSignOut} aria-label="Sign out" className="shrink-0">

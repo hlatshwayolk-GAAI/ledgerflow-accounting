@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Eye, EyeOff, Loader2, Mail, Lock, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, Loader2, Mail, Lock, ArrowRight, Sparkles } from "lucide-react";
+import { enableDemoMode } from "@/lib/demo-workspace";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Sign in — LedgerFlow" }] }),
@@ -44,6 +45,12 @@ function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const navigate = useNavigate();
+
+  const handleLaunchDemo = () => {
+    enableDemoMode();
+    toast.success("Welcome to Apex Logistics Demo Workspace!");
+    navigate({ to: "/app/dashboard" });
+  };
 
   const strength = mode === "signup" && password ? passwordStrength(password) : null;
 
@@ -163,6 +170,23 @@ function AuthPage() {
             {mode === "signup" && "Start managing your books in minutes."}
             {mode === "forgot" && "Enter your email and we'll send a reset link."}
           </p>
+
+          {/* Instant Demo Workspace Quick Action */}
+          <div className="mt-6 p-4 rounded-xl border border-primary/30 bg-primary/5 text-center">
+            <div className="text-xs font-semibold text-primary mb-1 flex items-center justify-center gap-1.5">
+              <Sparkles className="h-4 w-4" /> Ready-To-Explore Workspace
+            </div>
+            <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+              Explore double-entry bookkeeping, invoices, bills, reconciliation & reports with preloaded company data.
+            </p>
+            <Button
+              type="button"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm"
+              onClick={handleLaunchDemo}
+            >
+              🚀 Instant Demo Workspace (One-Click)
+            </Button>
+          </div>
 
           {/* Google button — only on signin/signup */}
           {mode !== "forgot" && (

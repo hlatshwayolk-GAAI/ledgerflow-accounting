@@ -1,6 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, CheckCircle2, BarChart3, FileText, Building2, Shield } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ArrowRight, CheckCircle2, BarChart3, FileText, Building2, Shield, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { enableDemoMode } from "@/lib/demo-workspace";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -15,6 +16,13 @@ export const Route = createFileRoute("/")({
 });
 
 function Landing() {
+  const navigate = useNavigate();
+
+  const handleLaunchDemo = () => {
+    enableDemoMode();
+    navigate({ to: "/app/dashboard" });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
@@ -24,6 +32,9 @@ function Landing() {
             <span className="font-semibold tracking-tight">LedgerFlow</span>
           </Link>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={handleLaunchDemo} className="hidden sm:inline-flex text-primary">
+              <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Try Live Demo
+            </Button>
             <Link to="/auth"><Button variant="ghost">Sign in</Button></Link>
             <Link to="/auth"><Button>Get started</Button></Link>
           </div>
@@ -44,7 +55,9 @@ function Landing() {
           <Link to="/auth">
             <Button size="lg">Start free <ArrowRight className="h-4 w-4 ml-2" /></Button>
           </Link>
-          <Button size="lg" variant="outline">See how it works</Button>
+          <Button size="lg" variant="outline" onClick={handleLaunchDemo}>
+            <Sparkles className="h-4 w-4 mr-2 text-primary" /> Instant Demo Workspace
+          </Button>
         </div>
 
         <div className="mt-16 grid sm:grid-cols-3 gap-3 max-w-2xl mx-auto text-sm text-muted-foreground">

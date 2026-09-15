@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatMoney, formatDate } from "@/lib/format";
 import { toast } from "sonner";
+import { isDemoMode } from "@/lib/demo-workspace";
 
 export const Route = createFileRoute("/app/reports")({
   component: ReportsPage,
@@ -58,30 +59,46 @@ function ReportsPage() {
     if (!active) return;
     setLoading(true);
     try {
-      // Fetch all accounts
-      const { data: accs, error: accsErr } = await supabase
-        .from("accounts")
-        .select("id,code,name,type")
-        .eq("company_id", active.id);
-      
-      if (accsErr) throw accsErr;
+      let accs: any[] = [];
+      let journals: any[] = [];
 
-      // Fetch all journals for active company up to endDate with lines
-      const { data: journals, error: journalsErr } = await supabase
-        .from("journals")
-        .select(`
-          id,
-          entry_date,
-          journal_lines (
-            account_id,
-            debit,
-            credit
-          )
-        `)
-        .eq("company_id", active.id)
-        .lte("entry_date", endDate);
+      if (isDemoMode()) {
+        const storedAccs = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+        const storedJournals = JSON.parse(localStorage.getItem("ledgerflow.demo_journals") || "[]");
+        accs = storedAccs.filter((a: any) => a.company_id === active.id);
+        journals = storedJournals.filter((j: any) => j.company_id === active.id && j.entry_date <= endDate);
+      } else {
+        try {
+          const { data: aData, error: aErr } = await supabase
+            .from("accounts")
+            .select("id,code,name,type")
+            .eq("company_id", active.id);
+          if (aErr) throw aErr;
+          accs = aData ?? [];
 
-      if (journalsErr) throw journalsErr;
+          const { data: jData, error: jErr } = await supabase
+            .from("journals")
+            .select(`
+              id,
+              entry_date,
+              journal_lines (
+                account_id,
+                debit,
+                credit
+              )
+            `)
+            .eq("company_id", active.id)
+            .lte("entry_date", endDate);
+          if (jErr) throw jErr;
+          journals = jData ?? [];
+        } catch (dbErr) {
+          console.warn("Could not load reports from Supabase:", dbErr);
+          const storedAccs = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+          const storedJournals = JSON.parse(localStorage.getItem("ledgerflow.demo_journals") || "[]");
+          accs = storedAccs.filter((a: any) => a.company_id === active.id);
+          journals = storedJournals.filter((j: any) => j.company_id === active.id && j.entry_date <= endDate);
+        }
+      }
 
       const hasAnyJournals = journals && journals.length > 0;
       setHasTransactions(hasAnyJournals);
@@ -221,11 +238,16 @@ function ReportsPage() {
   const liabilityItems = cumulativeReportData.filter(x => x.type === "liability");
   const equityItems = cumulativeReportData.filter(x => x.type === "equity");
 
+  const cumulativeRevenue = cumulativeReportData.filter(x => x.type === "revenue").reduce((s, x) => s + x.balance, 0);
+  const cumulativeCogs = cumulativeReportData.filter(x => isCogs(x)).reduce((s, x) => s + x.balance, 0);
+  const cumulativeExpenses = cumulativeReportData.filter(x => x.type === "expense" && !isCogs(x)).reduce((s, x) => s + x.balance, 0);
+  const cumulativeNetProfit = cumulativeRevenue - (cumulativeCogs + cumulativeExpenses);
+
   const totalAssets = assetItems.reduce((s, x) => s + x.balance, 0);
   const totalLiabilities = liabilityItems.reduce((s, x) => s + x.balance, 0);
   const totalEquityBase = equityItems.reduce((s, x) => s + x.balance, 0);
-  // Net Profit is rolled into Equity as Retained Earnings
-  const totalEquity = totalEquityBase + netProfit;
+  // Cumulative Net Profit is rolled into Equity as Retained Earnings
+  const totalEquity = totalEquityBase + cumulativeNetProfit;
   const totalEquityAndLiabilities = totalLiabilities + totalEquity;
   
   const bsBalanced = Math.abs(totalAssets - totalEquityAndLiabilities) < 0.01;
@@ -449,10 +471,10 @@ function ReportsPage() {
                         <span className="tabular-nums font-mono">{formatMoney(x.balance, active.currency)}</span>
                       </div>
                     ))}
-                    {/* Current Period Retained Earnings */}
+                    {/* Cumulative Retained Earnings */}
                     <div className="flex justify-between pl-4 text-muted-foreground italic">
-                      <span>Current Period Net Earnings</span>
-                      <span className="tabular-nums font-mono">{formatMoney(netProfit, active.currency)}</span>
+                      <span>Retained Earnings (Cumulative Profit)</span>
+                      <span className="tabular-nums font-mono">{formatMoney(cumulativeNetProfit, active.currency)}</span>
                     </div>
                     <div className="flex justify-between font-semibold border-t pt-1.5 mt-2">
                       <span>Total Equity</span>

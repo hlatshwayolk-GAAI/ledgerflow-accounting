@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
+import { isDemoMode } from "@/lib/demo-workspace";
+
 export const Route = createFileRoute("/app/suppliers")({
   component: SuppliersPage,
 });
@@ -24,14 +26,43 @@ function SuppliersPage() {
 
   const load = async () => {
     if (!active) return;
-    const { data } = await supabase.from("suppliers").select("id,name,email,phone").eq("company_id", active.id).order("name");
-    setItems((data as Supplier[]) ?? []);
+    if (isDemoMode()) {
+      const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_suppliers") || "[]");
+      setItems(stored.filter((s: any) => s.company_id === active.id));
+      return;
+    }
+    try {
+      const { data, error } = await supabase.from("suppliers").select("id,name,email,phone").eq("company_id", active.id).order("name");
+      if (error) throw error;
+      setItems((data as Supplier[]) ?? []);
+    } catch (e) {
+      const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_suppliers") || "[]");
+      setItems(stored.filter((s: any) => s.company_id === active.id));
+    }
   };
   useEffect(() => { load(); }, [active?.id]);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!active) return;
+    if (isDemoMode()) {
+      const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_suppliers") || "[]");
+      stored.push({
+        id: `demo-supp-${Date.now()}`,
+        company_id: active.id,
+        name: form.name,
+        email: form.email || null,
+        phone: form.phone || null,
+        address: form.address || null,
+      });
+      localStorage.setItem("ledgerflow.demo_suppliers", JSON.stringify(stored));
+      toast.success("Supplier added");
+      setOpen(false);
+      setForm({ name: "", email: "", phone: "", address: "" });
+      load();
+      return;
+    }
+
     const { error } = await supabase.from("suppliers").insert({
       company_id: active.id, name: form.name, email: form.email || null, phone: form.phone || null, address: form.address || null,
     });

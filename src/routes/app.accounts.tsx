@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Sparkles, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { formatMoney, formatDate } from "@/lib/format";
+import { isDemoMode } from "@/lib/demo-workspace";
 
 export const Route = createFileRoute("/app/accounts")({
   component: AccountsPage,
@@ -71,24 +72,49 @@ function AccountsPage() {
   const load = async () => {
     if (!active) return;
     setLoading(true);
-    // Load accounts
-    const { data: accs } = await supabase
-      .from("accounts")
-      .select("id,code,name,type")
-      .eq("company_id", active.id)
-      .order("code");
 
-    if (!accs) { setLoading(false); return; }
+    let accs: any[] = [];
+    let journals: any[] = [];
 
-    // Load all journal lines for this company to compute balances
-    const { data: journals } = await supabase
-      .from("journals")
-      .select("id, entry_date, journal_lines(account_id, debit, credit)")
-      .eq("company_id", active.id);
+    if (isDemoMode()) {
+      const storedAccs = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+      const storedJournals = JSON.parse(localStorage.getItem("ledgerflow.demo_journals") || "[]");
+      accs = storedAccs.filter((a: any) => a.company_id === active.id);
+      journals = storedJournals.filter((j: any) => j.company_id === active.id);
+    } else {
+      try {
+        const { data } = await supabase
+          .from("accounts")
+          .select("id,code,name,type")
+          .eq("company_id", active.id)
+          .order("code");
+        accs = data ?? [];
+
+        const { data: jData } = await supabase
+          .from("journals")
+          .select("id, entry_date, journal_lines(account_id, debit, credit)")
+          .eq("company_id", active.id);
+        journals = jData ?? [];
+      } catch (e) {
+        console.warn("Could not load accounts from Supabase:", e);
+        const storedAccs = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+        const storedJournals = JSON.parse(localStorage.getItem("ledgerflow.demo_journals") || "[]");
+        accs = storedAccs.filter((a: any) => a.company_id === active.id);
+        journals = storedJournals.filter((j: any) => j.company_id === active.id);
+      }
+    }
+
+    if (!accs.length) {
+      setAccounts([]);
+      setLoading(false);
+      return;
+    }
 
     // Aggregate balances per account
     const balanceMap: Record<string, { debit: number; credit: number }> = {};
-    accs.forEach(a => { balanceMap[a.id] = { debit: 0, credit: 0 }; });
+    accs.forEach((a) => {
+      balanceMap[a.id] = { debit: 0, credit: 0 };
+    });
 
     (journals ?? []).forEach((j: any) => {
       (j.journal_lines ?? []).forEach((l: any) => {
@@ -99,57 +125,55 @@ function AccountsPage() {
       });
     });
 
-    const enriched = accs.map(a => {
+    const enriched = accs.map((a) => {
       const { debit, credit } = balanceMap[a.id] ?? { debit: 0, credit: 0 };
-      // Normal balance: assets/expenses debit-normal; liabilities/equity/revenue credit-normal
-      const balance = (a.type === "asset" || a.type === "expense")
-        ? debit - credit
-        : credit - debit;
-      return { ...a, balance, totalDebit: debit, totalCredit: credit } as Account;
+      const balance =
+        a.type === "asset" || a.type === "expense"
+          ? debit - credit
+          : credit - debit;
+      return { ...a, balance, totalDebit: debit, totalCredit: credit };
     });
 
     setAccounts(enriched);
     setLoading(false);
   };
 
-  // Subscribe to real-time changes
-  useEffect(() => {
-    if (!active?.id) return;
-    load();
-    const channel = supabase
-      .channel(`accounts-ledger-${active.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "journal_lines" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "journals", filter: `company_id=eq.${active.id}` }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "accounts", filter: `company_id=eq.${active.id}` }, load)
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [active?.id]);
+  useEffect(() => { load(); }, [active?.id]);
 
   const loadLedger = async (accountId: string) => {
-    if (ledger[accountId]) return; // already loaded
+    if (ledger[accountId]) return;
     setLedgerLoading(accountId);
-    const { data, error } = await supabase
-      .from("journals")
-      .select(`
-        id, entry_date, description, reference,
-        journal_lines!inner(account_id, debit, credit)
-      `)
-      .eq("company_id", active!.id)
-      .eq("journal_lines.account_id", accountId)
-      .order("entry_date", { ascending: true })
-      .order("created_at", { ascending: true });
 
-    if (error) {
-      toast.error("Failed to load ledger");
-      setLedgerLoading(null);
-      return;
+    let jData: any[] = [];
+    if (isDemoMode()) {
+      const storedJournals = JSON.parse(localStorage.getItem("ledgerflow.demo_journals") || "[]");
+      jData = storedJournals.filter((j: any) => j.company_id === active!.id && (j.journal_lines || []).some((l: any) => l.account_id === accountId));
+    } else {
+      try {
+        const { data, error } = await supabase
+          .from("journals")
+          .select(`
+            id, entry_date, description, reference,
+            journal_lines!inner(account_id, debit, credit)
+          `)
+          .eq("company_id", active!.id)
+          .eq("journal_lines.account_id", accountId)
+          .order("entry_date", { ascending: true })
+          .order("created_at", { ascending: true });
+        if (error) throw error;
+        jData = data ?? [];
+      } catch (err) {
+        console.warn("Could not load ledger from Supabase:", err);
+        const storedJournals = JSON.parse(localStorage.getItem("ledgerflow.demo_journals") || "[]");
+        jData = storedJournals.filter((j: any) => j.company_id === active!.id && (j.journal_lines || []).some((l: any) => l.account_id === accountId));
+      }
     }
 
     const acc = accounts.find(a => a.id === accountId);
     const isDebitNormal = acc?.type === "asset" || acc?.type === "expense";
     let runningBalance = 0;
 
-    const entries: LedgerEntry[] = (data ?? []).flatMap((j: any) =>
+    const entries: LedgerEntry[] = (jData ?? []).flatMap((j: any) =>
       (j.journal_lines ?? [])
         .filter((l: any) => l.account_id === accountId)
         .map((l: any) => {
@@ -187,6 +211,31 @@ function AccountsPage() {
     if (!code || !name) return toast.error("Please fill in code and name");
 
     setLoading(true);
+    if (isDemoMode()) {
+      const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+      if (stored.some((a: any) => a.code === code.trim())) {
+        setLoading(false);
+        return toast.error("Account code already exists");
+      }
+      stored.push({
+        id: `demo-acc-${code.trim()}`,
+        company_id: active.id,
+        code: code.trim(),
+        name: name.trim(),
+        type,
+        created_at: new Date().toISOString(),
+      });
+      localStorage.setItem("ledgerflow.demo_accounts", JSON.stringify(stored));
+      setLoading(false);
+      toast.success("Account created successfully");
+      setOpen(false);
+      setCode("");
+      setName("");
+      setLedger({});
+      load();
+      return;
+    }
+
     const { error } = await supabase.from("accounts").insert({
       company_id: active.id,
       code: code.trim(),
@@ -215,18 +264,36 @@ function AccountsPage() {
     }
 
     setLoading(true);
+    if (isDemoMode()) {
+      const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+      stored.push({
+        id: `demo-acc-${tmpl.code}`,
+        company_id: active.id,
+        code: tmpl.code,
+        name: tmpl.name,
+        type: tmpl.type,
+        created_at: new Date().toISOString(),
+      });
+      localStorage.setItem("ledgerflow.demo_accounts", JSON.stringify(stored));
+      setLoading(false);
+      toast.success(`Account ${tmpl.code} — ${tmpl.name} added.`);
+      setLedger({});
+      load();
+      return;
+    }
+
     const { error } = await supabase.from("accounts").insert({
       company_id: active.id,
       code: tmpl.code,
       name: tmpl.name,
-      type: tmpl.type as any
+      type: tmpl.type as any,
     });
     setLoading(false);
 
     if (error) {
-      toast.error(error.message || "Failed to add template account");
+      toast.error(error.message || "Failed to add account");
     } else {
-      toast.success(`Added ${tmpl.name} (${tmpl.code})`);
+      toast.success(`Account ${tmpl.code} — ${tmpl.name} added.`);
       setLedger({});
       load();
     }

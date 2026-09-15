@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isDemoMode, DEMO_COMPANY } from "@/lib/demo-workspace";
 
 const STORAGE_KEY = "ledgerflow.active_company_id";
 
@@ -30,24 +31,51 @@ export function useCompanies() {
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("companies")
-      .select("id,name,currency,tax_number,industry")
-      .order("created_at", { ascending: true });
-    const list = (data ?? []) as Company[];
-    setCompanies(list);
-    let current = getActiveCompanyId();
-    if (!current || !list.find((c) => c.id === current)) {
-      current = list[0]?.id ?? null;
-      setActiveCompanyId(current);
+
+    if (isDemoMode()) {
+      const demoList = [DEMO_COMPANY];
+      setCompanies(demoList);
+      let current = getActiveCompanyId();
+      if (!current || !demoList.find((c) => c.id === current)) {
+        current = DEMO_COMPANY.id;
+        setActiveCompanyId(current);
+      }
+      setActiveId(current);
+      setLoading(false);
+      return;
     }
-    setActiveId(current);
-    setLoading(false);
+
+    try {
+      const { data, error } = await supabase
+        .from("companies")
+        .select("id,name,currency,tax_number,industry")
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      const list = (data ?? []) as Company[];
+      setCompanies(list);
+      let current = getActiveCompanyId();
+      if (!current || !list.find((c) => c.id === current)) {
+        current = list[0]?.id ?? null;
+        setActiveCompanyId(current);
+      }
+      setActiveId(current);
+    } catch (err) {
+      console.warn("Could not load companies from Supabase:", err);
+      // If error occurs and no companies yet, fall back gracefully
+      setCompanies([]);
+      setActiveId(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     load();
-    const onChange = () => setActiveId(getActiveCompanyId());
+    const onChange = () => {
+      setActiveId(getActiveCompanyId());
+      load();
+    };
     window.addEventListener("ledgerflow:company-changed", onChange);
     return () => window.removeEventListener("ledgerflow:company-changed", onChange);
   }, []);

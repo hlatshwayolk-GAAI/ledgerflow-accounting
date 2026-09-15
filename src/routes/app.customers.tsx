@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
+import { isDemoMode } from "@/lib/demo-workspace";
+
 export const Route = createFileRoute("/app/customers")({
   component: CustomersPage,
 });
@@ -24,8 +26,19 @@ function CustomersPage() {
 
   const load = async () => {
     if (!active) return;
-    const { data } = await supabase.from("customers").select("id,name,email,phone,address").eq("company_id", active.id).order("name");
-    setCustomers((data as Customer[]) ?? []);
+    if (isDemoMode()) {
+      const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_customers") || "[]");
+      setCustomers(stored.filter((c: any) => c.company_id === active.id));
+      return;
+    }
+    try {
+      const { data, error } = await supabase.from("customers").select("id,name,email,phone,address").eq("company_id", active.id).order("name");
+      if (error) throw error;
+      setCustomers((data as Customer[]) ?? []);
+    } catch (e) {
+      const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_customers") || "[]");
+      setCustomers(stored.filter((c: any) => c.company_id === active.id));
+    }
   };
 
   useEffect(() => { load(); }, [active?.id]);
@@ -33,6 +46,24 @@ function CustomersPage() {
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!active) return;
+    if (isDemoMode()) {
+      const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_customers") || "[]");
+      stored.push({
+        id: `demo-cust-${Date.now()}`,
+        company_id: active.id,
+        name: form.name,
+        email: form.email || null,
+        phone: form.phone || null,
+        address: form.address || null,
+      });
+      localStorage.setItem("ledgerflow.demo_customers", JSON.stringify(stored));
+      toast.success("Customer added");
+      setOpen(false);
+      setForm({ name: "", email: "", phone: "", address: "" });
+      load();
+      return;
+    }
+
     const { error } = await supabase.from("customers").insert({
       company_id: active.id,
       name: form.name,

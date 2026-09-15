@@ -6,6 +6,7 @@ import { useCompanies } from "@/hooks/use-company";
 import { Card } from "@/components/ui/card";
 import { formatMoney, formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
+import { isDemoMode } from "@/lib/demo-workspace";
 
 export const Route = createFileRoute("/app/dashboard")({
   component: Dashboard,
@@ -41,21 +42,37 @@ function Dashboard() {
       const today = new Date().toISOString().slice(0, 10);
       const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
-      // Load invoices
-      const { data: invoices } = await supabase
-        .from("invoices")
-        .select("id,invoice_number,issue_date,due_date,total,amount_paid,status,customer:customers(name)")
-        .eq("company_id", active.id)
-        .order("issue_date", { ascending: false });
-      const invList = invoices ?? [];
+      let invList: any[] = [];
+      let billList: any[] = [];
 
-      // Load bills
-      const { data: bills } = await supabase
-        .from("bills" as any)
-        .select("id,bill_number,issue_date,due_date,total,amount_paid,status,supplier:suppliers(name)")
-        .eq("company_id", active.id)
-        .order("issue_date", { ascending: false });
-      const billList = (bills ?? []) as any[];
+      if (isDemoMode()) {
+        const storedInvs = JSON.parse(localStorage.getItem("ledgerflow.demo_invoices") || "[]");
+        const storedBills = JSON.parse(localStorage.getItem("ledgerflow.demo_bills") || "[]");
+        invList = storedInvs.filter((i: any) => i.company_id === active.id);
+        billList = storedBills.filter((b: any) => b.company_id === active.id);
+      } else {
+        try {
+          const { data: invoices } = await supabase
+            .from("invoices")
+            .select("id,invoice_number,issue_date,due_date,total,amount_paid,status,customer:customers(name)")
+            .eq("company_id", active.id)
+            .order("issue_date", { ascending: false });
+          invList = invoices ?? [];
+
+          const { data: bills } = await supabase
+            .from("bills" as any)
+            .select("id,bill_number,issue_date,due_date,total,amount_paid,status,supplier:suppliers(name)")
+            .eq("company_id", active.id)
+            .order("issue_date", { ascending: false });
+          billList = (bills ?? []) as any[];
+        } catch (e) {
+          console.warn("Could not load dashboard data from Supabase:", e);
+          const storedInvs = JSON.parse(localStorage.getItem("ledgerflow.demo_invoices") || "[]");
+          const storedBills = JSON.parse(localStorage.getItem("ledgerflow.demo_bills") || "[]");
+          invList = storedInvs.filter((i: any) => i.company_id === active.id);
+          billList = storedBills.filter((b: any) => b.company_id === active.id);
+        }
+      }
 
       const invoicesOutstanding = invList.reduce((s, i: any) => s + Math.max(0, Number(i.total) - Number(i.amount_paid)), 0);
       const collected30 = invList.filter((i: any) => i.issue_date >= thirtyAgo).reduce((s, i: any) => s + Number(i.amount_paid), 0);

@@ -14,6 +14,13 @@ import { formatMoney, formatDate } from "@/lib/format";
 import { StatusBadge } from "./app.dashboard";
 import { toast } from "sonner";
 import { generateInvoicePDF } from "@/lib/invoice-pdf";
+import {
+  createInvoiceWithJournal,
+  deleteDraftInvoice,
+  recordInvoicePayment,
+  reverseInvoicePayment,
+} from "@/lib/accounting";
+import { isDemoMode } from "@/lib/demo-workspace";
 
 export const Route = createFileRoute("/app/invoices")({
   component: InvoicesPage,
@@ -24,7 +31,7 @@ type Line = { description: string; quantity: string; unit_price: string; tax_rat
 function InvoicesPage() {
   const { active } = useCompanies();
   const [invoices, setInvoices] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<{ id: string; name: string; email?: string }[]>([]);
+  const [customers, setCustomers] = useState<{ id: string; name: string; email?: string | null }[]>([]);
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -38,14 +45,34 @@ function InvoicesPage() {
 
   const load = async () => {
     if (!active) return;
-    const { data } = await supabase
-      .from("invoices")
-      .select("id,invoice_number,issue_date,due_date,total,amount_paid,status,subtotal,tax_total,notes,customer:customers(name,email)")
-      .eq("company_id", active.id)
-      .order("issue_date", { ascending: false });
-    setInvoices(data ?? []);
-    const { data: cs } = await supabase.from("customers").select("id,name,email").eq("company_id", active.id).order("name");
-    setCustomers((cs ?? []).map(c => ({ id: c.id, name: c.name, email: c.email ?? undefined })));
+    if (isDemoMode()) {
+      const demoInvs = JSON.parse(localStorage.getItem("ledgerflow.demo_invoices") || "[]");
+      const demoCusts = JSON.parse(localStorage.getItem("ledgerflow.demo_customers") || "[]");
+      setInvoices(demoInvs.filter((i: any) => i.company_id === active.id));
+      setCustomers(demoCusts.filter((c: any) => c.company_id === active.id));
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("id,invoice_number,issue_date,due_date,total,amount_paid,status,subtotal,tax_total,notes,customer:customers(name,email)")
+        .eq("company_id", active.id)
+        .order("issue_date", { ascending: false });
+      if (error) throw error;
+      setInvoices(data ?? []);
+
+      const { data: cs, error: csErr } = await supabase.from("customers").select("id,name,email").eq("company_id", active.id).order("name");
+      if (csErr) throw csErr;
+      setCustomers(cs ?? []);
+    } catch (err) {
+      console.warn("Could not load invoices from Supabase:", err);
+      // Fallback to local demo if Supabase fails
+      const demoInvs = JSON.parse(localStorage.getItem("ledgerflow.demo_invoices") || "[]");
+      const demoCusts = JSON.parse(localStorage.getItem("ledgerflow.demo_customers") || "[]");
+      setInvoices(demoInvs.filter((i: any) => i.company_id === active.id));
+      setCustomers(demoCusts.filter((c: any) => c.company_id === active.id));
+    }
   };
 
   useEffect(() => { load(); }, [active?.id]);
@@ -68,18 +95,16 @@ function InvoicesPage() {
     const amount = Number(payAmount);
     if (!Number.isFinite(amount) || amount <= 0) return toast.error("Enter a valid amount");
     setPaying(true);
-    const { error } = await supabase.rpc("record_invoice_payment", {
-      _invoice_id: payInv.id,
-      _amount: amount,
-      _payment_date: payDate,
-      _bank_account_code: "1000",
-      _notes: "",
-    });
-    setPaying(false);
-    if (error) return toast.error(error.message);
-    toast.success("Payment recorded");
-    setPayInv(null);
-    load();
+    try {
+      await recordInvoicePayment(payInv.id, amount, payDate, "1000", "");
+      toast.success("Payment recorded");
+      setPayInv(null);
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to record payment");
+    } finally {
+      setPaying(false);
+    }
   };
 
   // ── Reverse Payment ─────────────────────────────────────────────────
@@ -88,20 +113,27 @@ function InvoicesPage() {
   const reversePayment = async (inv: any) => {
     if (!confirm(`Reverse the latest payment on ${inv.invoice_number}? This will undo the payment journal entry and update the invoice status.`)) return;
     setReversingId(inv.id);
-    const { error } = await supabase.rpc("reverse_invoice_payment" as any, { _invoice_id: inv.id });
-    setReversingId(null);
-    if (error) return toast.error(error.message);
-    toast.success("Payment reversed successfully");
-    load();
+    try {
+      await reverseInvoicePayment(inv.id);
+      toast.success("Payment reversed successfully");
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to reverse payment");
+    } finally {
+      setReversingId(null);
+    }
   };
 
   // ── Delete ──────────────────────────────────────────────────────────
   const removeInvoice = async (inv: any) => {
     if (!confirm(`Delete invoice ${inv.invoice_number}? This also removes its journal entry.`)) return;
-    const { error } = await supabase.rpc("delete_draft_invoice", { _invoice_id: inv.id });
-    if (error) return toast.error(error.message);
-    toast.success("Invoice deleted");
-    load();
+    try {
+      await deleteDraftInvoice(inv.id);
+      toast.success("Invoice deleted");
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete invoice");
+    }
   };
 
   // ── PDF Download ────────────────────────────────────────────────────
@@ -109,12 +141,16 @@ function InvoicesPage() {
     if (!active) return;
     setDownloadingId(inv.id);
     try {
-      const { data: lineData, error } = await supabase
-        .from("invoice_lines")
-        .select("description,quantity,unit_price,tax_rate,line_total")
-        .eq("invoice_id", inv.id)
-        .order("position");
-      if (error) throw error;
+      let lineItems = inv.lines || [];
+      if (!lineItems.length && !isDemoMode()) {
+        const { data: lineData, error } = await supabase
+          .from("invoice_lines")
+          .select("description,quantity,unit_price,tax_rate,line_total")
+          .eq("invoice_id", inv.id)
+          .order("position");
+        if (error) throw error;
+        lineItems = lineData ?? [];
+      }
       const customer = customers.find((c) => c.name === inv.customer?.name) ?? null;
       generateInvoicePDF({
         invoice_number: inv.invoice_number,
@@ -127,7 +163,7 @@ function InvoicesPage() {
         total: Number(inv.total),
         amount_paid: Number(inv.amount_paid),
         customer: customer
-          ? { name: customer.name, email: customer.email }
+          ? { name: customer.name, email: customer.email ?? undefined }
           : inv.customer
             ? { name: inv.customer.name }
             : null,
@@ -136,7 +172,7 @@ function InvoicesPage() {
           currency: active.currency,
           tax_number: (active as any).tax_number ?? undefined,
         },
-        lines: (lineData ?? []).map((l: any) => ({
+        lines: lineItems.map((l: any) => ({
           description: l.description,
           quantity: Number(l.quantity),
           unit_price: Number(l.unit_price),
@@ -170,27 +206,32 @@ function InvoicesPage() {
     if (!active || !customerId) return toast.error("Pick a customer");
     if (lines.length === 0) return toast.error("Add at least one line");
     setSubmitting(true);
-    const { error } = await supabase.rpc("create_invoice_with_journal", {
-      _company_id: active.id,
-      _customer_id: customerId,
-      _invoice_number: number,
-      _issue_date: issueDate,
-      _due_date: dueDate,
-      _notes: notes || "",
-      _lines: lines.map(l => ({
-        description: l.description,
-        quantity: Number(l.quantity) || 0,
-        unit_price: Number(l.unit_price) || 0,
-        tax_rate: Number(l.tax_rate) || 0
-      })),
-    });
-    setSubmitting(false);
-    if (error) return toast.error(error.message);
-    toast.success("Invoice created and journal posted");
-    setOpen(false);
-    setCustomerId(""); setNotes("");
-    setLines([{ description: "", quantity: "1", unit_price: "0", tax_rate: "15" }]);
-    load();
+    try {
+      await createInvoiceWithJournal({
+        company_id: active.id,
+        customer_id: customerId,
+        invoice_number: number,
+        issue_date: issueDate,
+        due_date: dueDate,
+        notes: notes || "",
+        lines: lines.map((l) => ({
+          description: l.description,
+          quantity: Number(l.quantity) || 0,
+          unit_price: Number(l.unit_price) || 0,
+          tax_rate: Number(l.tax_rate) || 0,
+        })),
+      });
+      toast.success("Invoice created and journal posted");
+      setOpen(false);
+      setCustomerId("");
+      setNotes("");
+      setLines([{ description: "", quantity: "1", unit_price: "0", tax_rate: "15" }]);
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create invoice");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (!active) return null;

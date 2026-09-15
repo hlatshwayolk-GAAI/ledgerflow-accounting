@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { formatMoney, formatDate } from "@/lib/format";
 import { toast } from "sonner";
+import { recordInvoicePayment, recordBillPayment } from "@/lib/accounting";
+import { isDemoMode } from "@/lib/demo-workspace";
 
 export const Route = createFileRoute("/app/bank")({
   component: BankReconciliationPage,
@@ -21,6 +23,7 @@ type BankAccount = { id: string; name: string; bank_name: string; account_number
 
 type BankTransaction = {
   id: string;
+  bank_account_id?: string | null;
   date: string;
   description: string;
   reference: string | null;
@@ -54,21 +57,42 @@ function BankReconciliationPage() {
 
   const loadBankAccounts = async () => {
     if (!active) return;
-    const { data } = await supabase
-      .from("bank_accounts" as any)
-      .select("id,name,bank_name,account_number,account_id,account:accounts(code,name)")
-      .eq("company_id", active.id);
-    setBankAccounts((data as any[]) ?? []);
+    if (isDemoMode()) {
+      const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_bank_accounts") || "[]");
+      setBankAccounts(stored.filter((b: any) => b.company_id === active.id));
+      return;
+    }
+    try {
+      const { data } = await supabase
+        .from("bank_accounts")
+        .select("id,name,bank_name,account_number,account_id,account:accounts(code,name)")
+        .eq("company_id", active.id);
+      setBankAccounts((data as any[]) ?? []);
+    } catch (e) {
+      const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_bank_accounts") || "[]");
+      setBankAccounts(stored.filter((b: any) => b.company_id === active.id));
+    }
   };
 
   const loadTransactions = async () => {
     if (!active) return;
-    const { data } = await supabase
-      .from("bank_transactions" as any)
-      .select("id,date,description,reference,amount,status,reconciled_to_type,reconciled_to_id")
-      .eq("company_id", active.id)
-      .order("date", { ascending: false });
-    const txs = ((data as unknown) as BankTransaction[]) ?? [];
+    let txs: BankTransaction[] = [];
+    if (isDemoMode()) {
+      const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_bank_transactions") || "[]");
+      txs = stored.filter((t: any) => t.company_id === active.id);
+    } else {
+      try {
+        const { data } = await supabase
+          .from("bank_transactions")
+          .select("id,bank_account_id,date,description,reference,amount,status,reconciled_to_type,reconciled_to_id")
+          .eq("company_id", active.id)
+          .order("date", { ascending: false });
+        txs = (data as unknown as BankTransaction[]) ?? [];
+      } catch (e) {
+        const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_bank_transactions") || "[]");
+        txs = stored.filter((t: any) => t.company_id === active.id);
+      }
+    }
     setTransactions(txs);
     if (txs.length > 0 && !selectedTx) {
       setSelectedTx(txs[0]);
@@ -80,12 +104,22 @@ function BankReconciliationPage() {
 
   const loadAccounts = async () => {
     if (!active) return;
-    const { data } = await supabase
-      .from("accounts")
-      .select("id,code,name,type")
-      .eq("company_id", active.id)
-      .order("code");
-    setAccounts((data as Account[]) ?? []);
+    if (isDemoMode()) {
+      const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+      setAccounts(stored.filter((a: any) => a.company_id === active.id));
+      return;
+    }
+    try {
+      const { data } = await supabase
+        .from("accounts")
+        .select("id,code,name,type")
+        .eq("company_id", active.id)
+        .order("code");
+      setAccounts((data as Account[]) ?? []);
+    } catch (e) {
+      const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+      setAccounts(stored.filter((a: any) => a.company_id === active.id));
+    }
   };
 
   const load = async () => {
@@ -106,35 +140,55 @@ function BankReconciliationPage() {
       const targetAmount = Math.abs(Number(selectedTx.amount));
 
       if (isDeposit) {
-        // Find matching outstanding Invoices
-        const { data: invoices } = await supabase
-          .from("invoices")
-          .select("id,invoice_number,total,amount_paid,status,issue_date,customer:customers(name)")
-          .eq("company_id", active.id)
-          .neq("status", "paid");
+        let invoices: any[] = [];
+        if (isDemoMode()) {
+          const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_invoices") || "[]");
+          invoices = stored.filter((i: any) => i.company_id === active.id && i.status !== "paid");
+        } else {
+          try {
+            const { data } = await supabase
+              .from("invoices")
+              .select("id,invoice_number,total,amount_paid,status,issue_date,customer:customers(name)")
+              .eq("company_id", active.id)
+              .neq("status", "paid");
+            invoices = data ?? [];
+          } catch (e) {
+            const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_invoices") || "[]");
+            invoices = stored.filter((i: any) => i.company_id === active.id && i.status !== "paid");
+          }
+        }
 
         const matches = ((invoices as any[]) ?? []).filter((inv: any) => {
           const remaining = Number(inv.total) - Number(inv.amount_paid);
-          // Match by amount
           const amountMatch = Math.abs(remaining - targetAmount) < 0.01;
-          // Match by proximity or reference
           const textMatch = selectedTx.description.toLowerCase().includes(inv.invoice_number.toLowerCase()) ||
-                            selectedTx.description.toLowerCase().includes(inv.customer?.name.toLowerCase() ?? "");
+                            selectedTx.description.toLowerCase().includes(inv.customer?.name?.toLowerCase() ?? "");
           return amountMatch || textMatch;
         });
 
         if (matches.length > 0) {
-          setSuggestedMatch({ type: "invoice", item: matches[0], label: `Invoice ${matches[0].invoice_number} — ${matches[0].customer?.name}` });
+          setSuggestedMatch({ type: "invoice", item: matches[0], label: `Invoice ${matches[0].invoice_number} — ${matches[0].customer?.name ?? ""}` });
         } else {
           setSuggestedMatch(null);
         }
       } else {
-        // Find matching outstanding Bills
-        const { data: bills } = await supabase
-          .from("bills" as any)
-          .select("id,bill_number,total,amount_paid,status,issue_date,supplier:suppliers(name)")
-          .eq("company_id", active.id)
-          .neq("status", "paid");
+        let bills: any[] = [];
+        if (isDemoMode()) {
+          const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_bills") || "[]");
+          bills = stored.filter((b: any) => b.company_id === active.id && b.status !== "paid");
+        } else {
+          try {
+            const { data } = await supabase
+              .from("bills" as any)
+              .select("id,bill_number,total,amount_paid,status,issue_date,supplier:suppliers(name)")
+              .eq("company_id", active.id)
+              .neq("status", "paid");
+            bills = (data as any[]) ?? [];
+          } catch (e) {
+            const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_bills") || "[]");
+            bills = stored.filter((b: any) => b.company_id === active.id && b.status !== "paid");
+          }
+        }
 
         const matches = ((bills as any[]) ?? []).filter((bill: any) => {
           const remaining = Number(bill.total) - Number(bill.amount_paid);
@@ -236,35 +290,53 @@ function BankReconciliationPage() {
       const targetBankCode = bankAccounts.find(ba => ba.id === selectedTx.bank_account_id)?.account?.code || "1000";
 
       if (suggestedMatch.type === "invoice") {
-        const { data: journalId, error } = await supabase.rpc("record_invoice_payment", {
-          _invoice_id: suggestedMatch.item.id,
-          _amount: txAmount,
-          _payment_date: selectedTx.date,
-          _bank_account_code: targetBankCode,
-          _notes: `Reconciled via Bank Statement: ${selectedTx.description}`,
-        });
-        if (error) throw error;
+        await recordInvoicePayment(
+          suggestedMatch.item.id,
+          txAmount,
+          selectedTx.date,
+          targetBankCode,
+          `Reconciled via Bank Statement: ${selectedTx.description}`
+        );
 
-        // Mark txn reconciled
-        await supabase
-          .from("bank_transactions" as any)
-          .update({ status: "reconciled", reconciled_to_type: "invoice", reconciled_to_id: suggestedMatch.item.id })
-          .eq("id", selectedTx.id);
+        if (isDemoMode()) {
+          const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_bank_transactions") || "[]");
+          const idx = stored.findIndex((t: any) => t.id === selectedTx.id);
+          if (idx !== -1) {
+            stored[idx].status = "reconciled";
+            stored[idx].reconciled_to_type = "invoice";
+            stored[idx].reconciled_to_id = suggestedMatch.item.id;
+            localStorage.setItem("ledgerflow.demo_bank_transactions", JSON.stringify(stored));
+          }
+        } else {
+          await supabase
+            .from("bank_transactions" as any)
+            .update({ status: "reconciled", reconciled_to_type: "invoice", reconciled_to_id: suggestedMatch.item.id })
+            .eq("id", selectedTx.id);
+        }
       } else {
-        const { data: journalId, error } = await supabase.rpc("record_bill_payment" as any, {
-          _bill_id: suggestedMatch.item.id,
-          _amount: txAmount,
-          _payment_date: selectedTx.date,
-          _bank_account_code: targetBankCode,
-          _notes: `Reconciled via Bank Statement: ${selectedTx.description}`,
-        });
-        if (error) throw error;
+        await recordBillPayment(
+          suggestedMatch.item.id,
+          txAmount,
+          selectedTx.date,
+          targetBankCode,
+          `Reconciled via Bank Statement: ${selectedTx.description}`
+        );
 
-        // Mark txn reconciled
-        await supabase
-          .from("bank_transactions" as any)
-          .update({ status: "reconciled", reconciled_to_type: "bill", reconciled_to_id: suggestedMatch.item.id })
-          .eq("id", selectedTx.id);
+        if (isDemoMode()) {
+          const stored = JSON.parse(localStorage.getItem("ledgerflow.demo_bank_transactions") || "[]");
+          const idx = stored.findIndex((t: any) => t.id === selectedTx.id);
+          if (idx !== -1) {
+            stored[idx].status = "reconciled";
+            stored[idx].reconciled_to_type = "bill";
+            stored[idx].reconciled_to_id = suggestedMatch.item.id;
+            localStorage.setItem("ledgerflow.demo_bank_transactions", JSON.stringify(stored));
+          }
+        } else {
+          await supabase
+            .from("bank_transactions" as any)
+            .update({ status: "reconciled", reconciled_to_type: "bill", reconciled_to_id: suggestedMatch.item.id })
+            .eq("id", selectedTx.id);
+        }
       }
 
       toast.success("Transaction reconciled!");
@@ -279,48 +351,79 @@ function BankReconciliationPage() {
     if (!selectedTx || !directAccountId || !active) return;
     try {
       const txAmount = Math.abs(Number(selectedTx.amount));
-      const targetBankAcc = bankAccounts.find(ba => ba.id === selectedTx.bank_account_id);
-      const targetBankAccountId = targetBankAcc?.account_id;
-      const targetBankCode = targetBankAcc?.account?.code || "1000";
+      const targetBankAcc = bankAccounts.find(ba => ba.id === selectedTx.bank_account_id) || bankAccounts[0];
+      const defaultBankId = accounts.find(a => a.code === "1000")?.id;
+      const targetBankAccountId = targetBankAcc?.account_id || defaultBankId;
 
       if (!targetBankAccountId) throw new Error("Linked bank account not configured properly");
 
-      // Insert Journal Entry
-      const { data: journal, error: jErr } = await supabase
-        .from("journals")
-        .insert({
+      const isDeposit = Number(selectedTx.amount) > 0;
+
+      if (isDemoMode()) {
+        const storedJournals = JSON.parse(localStorage.getItem("ledgerflow.demo_journals") || "[]");
+        const journalId = `demo-jrn-${Date.now()}`;
+        const jLines = isDeposit
+          ? [
+              { account_id: targetBankAccountId, debit: txAmount, credit: 0, account: { code: "1000", name: "Bank Account" } },
+              { account_id: directAccountId, debit: 0, credit: txAmount, account: { code: "4000", name: "Direct Account" } },
+            ]
+          : [
+              { account_id: directAccountId, debit: txAmount, credit: 0, account: { code: "6000", name: "Direct Account" } },
+              { account_id: targetBankAccountId, debit: 0, credit: txAmount, account: { code: "1000", name: "Bank Account" } },
+            ];
+
+        storedJournals.unshift({
+          id: journalId,
           company_id: active.id,
           entry_date: selectedTx.date,
           description: `Direct Bank Reconciliation — ${selectedTx.description}`,
           source_type: "bank_direct",
           source_id: selectedTx.id,
-        })
-        .select("id")
-        .single();
-      if (jErr) throw jErr;
+          created_at: new Date().toISOString(),
+          journal_lines: jLines,
+        });
+        localStorage.setItem("ledgerflow.demo_journals", JSON.stringify(storedJournals));
 
-      // Create balancing journal lines
-      const isDeposit = Number(selectedTx.amount) > 0;
-      const lines = [];
-
-      if (isDeposit) {
-        // Deposit: Dr Bank (1000), Cr Revenue/Other Selected Account
-        lines.push({ journal_id: journal.id, account_id: targetBankAccountId, debit: txAmount, credit: 0 });
-        lines.push({ journal_id: journal.id, account_id: directAccountId, debit: 0, credit: txAmount });
+        const storedTx = JSON.parse(localStorage.getItem("ledgerflow.demo_bank_transactions") || "[]");
+        const idx = storedTx.findIndex((t: any) => t.id === selectedTx.id);
+        if (idx !== -1) {
+          storedTx[idx].status = "reconciled";
+          storedTx[idx].reconciled_to_type = "direct";
+          storedTx[idx].reconciled_to_id = journalId;
+          localStorage.setItem("ledgerflow.demo_bank_transactions", JSON.stringify(storedTx));
+        }
       } else {
-        // Withdrawal: Dr Expense/Other Selected Account, Cr Bank (1000)
-        lines.push({ journal_id: journal.id, account_id: directAccountId, debit: txAmount, credit: 0 });
-        lines.push({ journal_id: journal.id, account_id: targetBankAccountId, debit: 0, credit: txAmount });
+        // Insert Journal Entry
+        const { data: journal, error: jErr } = await supabase
+          .from("journals")
+          .insert({
+            company_id: active.id,
+            entry_date: selectedTx.date,
+            description: `Direct Bank Reconciliation — ${selectedTx.description}`,
+            source_type: "bank_direct",
+            source_id: selectedTx.id,
+          })
+          .select("id")
+          .single();
+        if (jErr) throw jErr;
+
+        const lines = [];
+        if (isDeposit) {
+          lines.push({ journal_id: journal.id, account_id: targetBankAccountId, debit: txAmount, credit: 0 });
+          lines.push({ journal_id: journal.id, account_id: directAccountId, debit: 0, credit: txAmount });
+        } else {
+          lines.push({ journal_id: journal.id, account_id: directAccountId, debit: txAmount, credit: 0 });
+          lines.push({ journal_id: journal.id, account_id: targetBankAccountId, debit: 0, credit: txAmount });
+        }
+
+        const { error: jlErr } = await supabase.from("journal_lines").insert(lines);
+        if (jlErr) throw jlErr;
+
+        await supabase
+          .from("bank_transactions" as any)
+          .update({ status: "reconciled", reconciled_to_type: "direct", reconciled_to_id: journal.id })
+          .eq("id", selectedTx.id);
       }
-
-      const { error: jlErr } = await supabase.from("journal_lines").insert(lines);
-      if (jlErr) throw jlErr;
-
-      // Update bank transaction status
-      await supabase
-        .from("bank_transactions" as any)
-        .update({ status: "reconciled", reconciled_to_type: "direct", reconciled_to_id: journal.id })
-        .eq("id", selectedTx.id);
 
       toast.success("Transaction reconciled directly!");
       setDirectAccountId("");

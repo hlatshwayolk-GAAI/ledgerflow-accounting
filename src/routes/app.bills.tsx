@@ -13,6 +13,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { formatMoney, formatDate } from "@/lib/format";
 import { StatusBadge } from "./app.dashboard";
 import { toast } from "sonner";
+import {
+  createBillWithJournal,
+  deleteDraftBill,
+  recordBillPayment,
+  reverseBillPayment,
+} from "@/lib/accounting";
+import { isDemoMode } from "@/lib/demo-workspace";
 
 export const Route = createFileRoute("/app/bills")({
   component: BillsPage,
@@ -48,6 +55,16 @@ function BillsPage() {
 
   const load = async () => {
     if (!active) return;
+    if (isDemoMode()) {
+      const demoBills = JSON.parse(localStorage.getItem("ledgerflow.demo_bills") || "[]");
+      const demoSupps = JSON.parse(localStorage.getItem("ledgerflow.demo_suppliers") || "[]");
+      const demoAccs = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+      setBills(demoBills.filter((b: any) => b.company_id === active.id));
+      setSuppliers(demoSupps.filter((s: any) => s.company_id === active.id));
+      setAccounts(demoAccs.filter((a: any) => a.company_id === active.id && (a.type === "expense" || a.type === "asset")));
+      return;
+    }
+
     try {
       const { data: bData, error: bErr } = await supabase
         .from("bills" as any)
@@ -72,7 +89,13 @@ function BillsPage() {
         .order("code");
       setAccounts((aData as Account[]) ?? []);
     } catch (err) {
-      console.error(err);
+      console.warn("Could not load bills from Supabase:", err);
+      const demoBills = JSON.parse(localStorage.getItem("ledgerflow.demo_bills") || "[]");
+      const demoSupps = JSON.parse(localStorage.getItem("ledgerflow.demo_suppliers") || "[]");
+      const demoAccs = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+      setBills(demoBills.filter((b: any) => b.company_id === active.id));
+      setSuppliers(demoSupps.filter((s: any) => s.company_id === active.id));
+      setAccounts(demoAccs.filter((a: any) => a.company_id === active.id && (a.type === "expense" || a.type === "asset")));
     }
   };
 
@@ -99,29 +122,33 @@ function BillsPage() {
     if (lines.some(l => !l.account_id)) return toast.error("Select an account for every line");
 
     setSubmitting(true);
-    const { error } = await supabase.rpc("create_bill_with_journal" as any, {
-      _company_id: active.id,
-      _supplier_id: supplierId,
-      _bill_number: number,
-      _issue_date: issueDate,
-      _due_date: dueDate,
-      _notes: notes || "",
-      _lines: lines.map(l => ({
-        description: l.description,
-        account_id: l.account_id,
-        quantity: Number(l.quantity) || 0,
-        unit_price: Number(l.unit_price) || 0,
-        tax_rate: Number(l.tax_rate) || 0
-      })),
-    });
-    setSubmitting(false);
-
-    if (error) return toast.error(error.message);
-    toast.success("Bill created and journal posted");
-    setOpen(false);
-    setSupplierId(""); setNotes("");
-    setLines([{ description: "", quantity: "1", unit_price: "0", tax_rate: "15", account_id: "" }]);
-    load();
+    try {
+      await createBillWithJournal({
+        company_id: active.id,
+        supplier_id: supplierId,
+        bill_number: number,
+        issue_date: issueDate,
+        due_date: dueDate,
+        notes: notes || "",
+        lines: lines.map((l) => ({
+          description: l.description,
+          account_id: l.account_id,
+          quantity: Number(l.quantity) || 0,
+          unit_price: Number(l.unit_price) || 0,
+          tax_rate: Number(l.tax_rate) || 0,
+        })),
+      });
+      toast.success("Bill created and journal posted");
+      setOpen(false);
+      setSupplierId("");
+      setNotes("");
+      setLines([{ description: "", quantity: "1", unit_price: "0", tax_rate: "15", account_id: "" }]);
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create bill");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const openPayment = (bill: any) => {
@@ -137,37 +164,41 @@ function BillsPage() {
     if (!Number.isFinite(amount) || amount <= 0) return toast.error("Enter a valid amount");
 
     setPaying(true);
-    const { error } = await supabase.rpc("record_bill_payment" as any, {
-      _bill_id: payBill.id,
-      _amount: amount,
-      _payment_date: payDate,
-      _bank_account_code: "1000",
-      _notes: "",
-    });
-    setPaying(false);
-
-    if (error) return toast.error(error.message);
-    toast.success("Payment recorded");
-    setPayBill(null);
-    load();
+    try {
+      await recordBillPayment(payBill.id, amount, payDate, "1000", "");
+      toast.success("Payment recorded");
+      setPayBill(null);
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to record payment");
+    } finally {
+      setPaying(false);
+    }
   };
 
   const reversePayment = async (bill: any) => {
     if (!confirm(`Reverse the latest payment on ${bill.bill_number}? This will undo the payment journal entry and update the bill status.`)) return;
     setReversingId(bill.id);
-    const { error } = await supabase.rpc("reverse_bill_payment" as any, { _bill_id: bill.id });
-    setReversingId(null);
-    if (error) return toast.error(error.message);
-    toast.success("Payment reversed successfully");
-    load();
+    try {
+      await reverseBillPayment(bill.id);
+      toast.success("Payment reversed successfully");
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to reverse payment");
+    } finally {
+      setReversingId(null);
+    }
   };
 
   const removeBill = async (bill: any) => {
     if (!confirm(`Delete bill ${bill.bill_number}? This also removes its journal entry.`)) return;
-    const { error } = await supabase.rpc("delete_draft_bill" as any, { _bill_id: bill.id });
-    if (error) return toast.error(error.message);
-    toast.success("Bill deleted");
-    load();
+    try {
+      await deleteDraftBill(bill.id);
+      toast.success("Bill deleted");
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete bill");
+    }
   };
 
   if (!active) return null;

@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/select";
 import { formatMoney, formatDate } from "@/lib/format";
 import { toast } from "sonner";
+import { createManualJournal } from "@/lib/accounting";
+import { isDemoMode } from "@/lib/demo-workspace";
 
 export const Route = createFileRoute("/app/journals")({
   component: JournalsPage,
@@ -70,32 +72,44 @@ function JournalsPage() {
 
   const load = async () => {
     if (!active) return;
-    const { data: jData, error } = await supabase
-      .from("journals")
-      .select(`
-        id, entry_date, description, reference, source_type, created_at,
-        journal_lines (
-          account_id, debit, credit,
-          account:accounts(code, name)
-        )
-      `)
-      .eq("company_id", active.id)
-      .order("entry_date", { ascending: false })
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error(error);
-      toast.error("Failed to load journal entries");
-    } else {
-      setJournals((jData ?? []) as any);
+    if (isDemoMode()) {
+      const demoJournals = JSON.parse(localStorage.getItem("ledgerflow.demo_journals") || "[]");
+      const demoAccounts = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+      setJournals(demoJournals.filter((j: any) => j.company_id === active.id));
+      setAccounts(demoAccounts.filter((a: any) => a.company_id === active.id));
+      return;
     }
 
-    const { data: aData } = await supabase
-      .from("accounts")
-      .select("id,code,name,type")
-      .eq("company_id", active.id)
-      .order("code");
-    setAccounts((aData as Account[]) ?? []);
+    try {
+      const { data: jData, error } = await supabase
+        .from("journals")
+        .select(`
+          id, entry_date, description, reference, source_type, created_at,
+          journal_lines (
+            account_id, debit, credit,
+            account:accounts(code, name)
+          )
+        `)
+        .eq("company_id", active.id)
+        .order("entry_date", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setJournals((jData ?? []) as any);
+
+      const { data: aData } = await supabase
+        .from("accounts")
+        .select("id,code,name,type")
+        .eq("company_id", active.id)
+        .order("code");
+      setAccounts((aData as Account[]) ?? []);
+    } catch (err) {
+      console.warn("Could not load journals from Supabase:", err);
+      const demoJournals = JSON.parse(localStorage.getItem("ledgerflow.demo_journals") || "[]");
+      const demoAccounts = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+      setJournals(demoJournals.filter((j: any) => j.company_id === active.id));
+      setAccounts(demoAccounts.filter((a: any) => a.company_id === active.id));
+    }
   };
 
   useEffect(() => { load(); }, [active?.id]);
@@ -133,25 +147,27 @@ function JournalsPage() {
     if (lines.every(l => (parseFloat(l.debit) || 0) === 0 && (parseFloat(l.credit) || 0) === 0)) return toast.error("At least one line must have a debit or credit amount");
 
     setSubmitting(true);
-    const { error } = await supabase.rpc("create_manual_journal" as any, {
-      _company_id: active.id,
-      _entry_date: entryDate,
-      _description: description.trim(),
-      _reference: reference.trim() || null,
-      _lines: lines.map(l => ({
-        account_id: l.account_id,
-        debit: parseFloat(l.debit) || 0,
-        credit: parseFloat(l.credit) || 0,
-        description: l.description || null,
-      })),
-    });
-    setSubmitting(false);
-
-    if (error) return toast.error(error.message);
-    toast.success("Journal entry posted");
-    setOpen(false);
-    resetForm();
-    load();
+    try {
+      await createManualJournal(
+        active.id,
+        entryDate,
+        description.trim(),
+        reference.trim() || null,
+        lines.map((l) => ({
+          account_id: l.account_id,
+          debit: parseFloat(l.debit) || 0,
+          credit: parseFloat(l.credit) || 0,
+        }))
+      );
+      toast.success("Journal entry posted");
+      setOpen(false);
+      resetForm();
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to post journal entry");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (!active) return null;

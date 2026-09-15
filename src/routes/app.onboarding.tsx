@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 
 
+import { seedCompanyAccounts } from "@/lib/accounting";
+
 export const Route = createFileRoute("/app/onboarding")({
   component: Onboarding,
 });
@@ -35,9 +37,10 @@ function Onboarding() {
         .select("id")
         .single();
       if (error) throw error;
+      await seedCompanyAccounts(data.id);
       setActiveCompanyId(data.id);
       await reload();
-      toast.success("Company created");
+      toast.success("Company created and chart of accounts configured");
       navigate({ to: "/app/dashboard" });
     } catch (err) {
       console.error("Onboarding error:", err);
