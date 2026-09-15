@@ -31,7 +31,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatMoney, formatDate } from "@/lib/format";
 import { toast } from "sonner";
-import { createManualJournal } from "@/lib/accounting";
+import { createManualJournal, seedCompanyAccounts } from "@/lib/accounting";
 import { isDemoMode } from "@/lib/demo-workspace";
 
 export const Route = createFileRoute("/app/journals")({
@@ -315,6 +315,8 @@ function JournalsPage() {
     }
 
     try {
+      await seedCompanyAccounts(active.id);
+
       const { data: jData, error } = await supabase
         .from("journals")
         .select(`

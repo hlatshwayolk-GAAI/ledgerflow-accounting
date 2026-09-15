@@ -13,6 +13,7 @@ import { Plus, Sparkles, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { formatMoney, formatDate } from "@/lib/format";
 import { isDemoMode } from "@/lib/demo-workspace";
+import { seedCompanyAccounts } from "@/lib/accounting";
 
 export const Route = createFileRoute("/app/accounts")({
   component: AccountsPage,
@@ -83,6 +84,7 @@ function AccountsPage() {
       journals = storedJournals.filter((j: any) => j.company_id === active.id);
     } else {
       try {
+        await seedCompanyAccounts(active.id);
         const { data } = await supabase
           .from("accounts")
           .select("id,code,name,type")
