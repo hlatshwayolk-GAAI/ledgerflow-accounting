@@ -63,7 +63,7 @@ function BankReconciliationPage() {
     }
     try {
       const { data } = await supabase
-        .from("bank_accounts")
+        .from("bank_accounts" as any)
         .select("id,name,bank_name,account_number,account_id,account:accounts(code,name)")
         .eq("company_id", active.id);
       setBankAccounts((data as any[]) ?? []);
