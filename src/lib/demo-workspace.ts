@@ -6,6 +6,11 @@ export interface DemoCompany {
   currency: string;
   tax_number: string | null;
   industry: string | null;
+  logo_url?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
 }
 
 export const DEMO_USER = {
@@ -23,6 +28,11 @@ export const DEMO_COMPANY: DemoCompany = {
   currency: "ZAR",
   tax_number: "4920192840",
   industry: "Freight & Supply Chain",
+  logo_url: null,
+  address: "142 Logistics Blvd, Industrial Park, Sandton, 2196",
+  phone: "+27 11 555 0192",
+  email: "billing@apexlogistics.co.za",
+  website: "https://apexlogistics.co.za",
 };
 
 export const STANDARD_ACCOUNTS = [
@@ -39,6 +49,11 @@ export const STANDARD_ACCOUNTS = [
   { code: "6000", name: "Depot & Office Rent", type: "expense" },
   { code: "6100", name: "Drivers & Staff Salaries", type: "expense" },
   { code: "6200", name: "Fleet Telematics & Utilities", type: "expense" },
+  { code: "1510", name: "Manufacturing Plant & Machinery", type: "asset" },
+  { code: "1550", name: "Accumulated Depreciation - Plant & Machinery", type: "asset" },
+  { code: "2150", name: "SARS Corporate Income Tax Payable", type: "liability" },
+  { code: "6500", name: "Depreciation Expense (SARS Sec 12C / 11e)", type: "expense" },
+  { code: "8000", name: "Corporate Income Tax Expense (SARS)", type: "expense" },
 ];
 
 export function isDemoMode(): boolean {

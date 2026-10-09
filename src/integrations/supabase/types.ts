@@ -161,37 +161,52 @@ export type Database = {
       }
       companies: {
         Row: {
+          address: string | null
           created_at: string
           currency: string
+          email: string | null
           financial_year_start: string | null
           id: string
           industry: string | null
+          logo_url: string | null
           name: string
           owner_id: string
+          phone: string | null
           tax_number: string | null
           updated_at: string
+          website: string | null
         }
         Insert: {
+          address?: string | null
           created_at?: string
           currency?: string
+          email?: string | null
           financial_year_start?: string | null
           id?: string
           industry?: string | null
+          logo_url?: string | null
           name: string
           owner_id: string
+          phone?: string | null
           tax_number?: string | null
           updated_at?: string
+          website?: string | null
         }
         Update: {
+          address?: string | null
           created_at?: string
           currency?: string
+          email?: string | null
           financial_year_start?: string | null
           id?: string
           industry?: string | null
+          logo_url?: string | null
           name?: string
           owner_id?: string
+          phone?: string | null
           tax_number?: string | null
           updated_at?: string
+          website?: string | null
         }
         Relationships: []
       }

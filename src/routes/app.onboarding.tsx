@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 
 import { seedCompanyAccounts } from "@/lib/accounting";
+import { isDemoMode, STANDARD_ACCOUNTS } from "@/lib/demo-workspace";
 
 export const Route = createFileRoute("/app/onboarding")({
   component: Onboarding,
@@ -29,6 +30,43 @@ function Onboarding() {
     e.preventDefault();
     setLoading(true);
     try {
+      if (isDemoMode()) {
+        const newCompanyId = `demo-co-${Date.now()}`;
+        const newCompany = {
+          id: newCompanyId,
+          name,
+          currency,
+          industry: industry || null,
+          tax_number: taxNumber || null,
+        };
+        let demoList: any[] = [];
+        try {
+          demoList = JSON.parse(localStorage.getItem("ledgerflow.demo_companies") || "[]");
+        } catch {
+          demoList = [];
+        }
+        demoList.push(newCompany);
+        localStorage.setItem("ledgerflow.demo_companies", JSON.stringify(demoList));
+
+        // Seed demo accounts for this new company
+        const existingAccounts = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+        const newAccounts = STANDARD_ACCOUNTS.map((a) => ({
+          id: `demo-acc-${a.code}-${Date.now().toString().slice(-4)}`,
+          company_id: newCompanyId,
+          code: a.code,
+          name: a.name,
+          type: a.type,
+          created_at: new Date().toISOString(),
+        }));
+        localStorage.setItem("ledgerflow.demo_accounts", JSON.stringify([...existingAccounts, ...newAccounts]));
+
+        setActiveCompanyId(newCompanyId);
+        await reload();
+        toast.success("Company created and chart of accounts configured");
+        navigate({ to: "/app/dashboard" });
+        return;
+      }
+
       const { data: { user }, error: authErr } = await supabase.auth.getUser();
       if (authErr || !user) throw new Error(authErr?.message ?? "Not signed in");
       const { data, error } = await supabase

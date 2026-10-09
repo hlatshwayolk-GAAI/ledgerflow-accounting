@@ -1,12 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, Trash2, MoreHorizontal, Wallet, Download, Undo2 } from "lucide-react";
+import { Plus, Trash2, MoreHorizontal, Wallet, Download, Undo2, CheckCircle2, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompanies } from "@/hooks/use-company";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -35,6 +36,7 @@ function InvoicesPage() {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [filterView, setFilterView] = useState<"active" | "all">("active");
 
   const [customerId, setCustomerId] = useState("");
   const [number, setNumber] = useState("");
@@ -97,7 +99,12 @@ function InvoicesPage() {
     setPaying(true);
     try {
       await recordInvoicePayment(payInv.id, amount, payDate, "1000", "");
-      toast.success("Payment recorded");
+      const remainingAfter = Math.max(0, Number(payInv.total) - (Number(payInv.amount_paid || 0) + amount));
+      if (remainingAfter <= 0.005) {
+        toast.success(`Payment recorded. Invoice ${payInv.invoice_number} is completely paid and moved to Receivables History.`);
+      } else {
+        toast.success("Payment recorded successfully");
+      }
       setPayInv(null);
       load();
     } catch (err: any) {
@@ -170,7 +177,12 @@ function InvoicesPage() {
         company: {
           name: active.name,
           currency: active.currency,
-          tax_number: (active as any).tax_number ?? undefined,
+          tax_number: active.tax_number,
+          logo_url: active.logo_url,
+          address: active.address,
+          phone: active.phone,
+          email: active.email,
+          website: active.website,
         },
         lines: lineItems.map((l: any) => ({
           description: l.description,
@@ -236,12 +248,27 @@ function InvoicesPage() {
 
   if (!active) return null;
 
+  const isCompletelyPaid = (inv: any) =>
+    inv.status === "paid" ||
+    Math.max(0, Number(inv.total) - Number(inv.amount_paid || 0)) <= 0.005;
+
+  const openInvoices = invoices.filter((i) => !isCompletelyPaid(i));
+  const paidInvoices = invoices.filter((i) => isCompletelyPaid(i));
+  const displayedInvoices = filterView === "active" ? openInvoices : invoices;
+
   return (
     <div className="px-6 md:px-10 py-8 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Invoices</h1>
-          <p className="text-sm text-muted-foreground mt-1">{invoices.length} total</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight">Invoices</h1>
+            <Badge variant="outline" className="font-normal text-xs">
+              {openInvoices.length} active
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            Active receivables · Completely paid invoices reflect in Receivables (A/R) History
+          </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -357,9 +384,58 @@ function InvoicesPage() {
         </Card>
       )}
 
+      {paidInvoices.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 mb-4 rounded-lg border bg-muted/30 text-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+            <span>
+              <strong>{paidInvoices.length} completely paid receivable{paidInvoices.length > 1 ? "s are" : " is"}</strong> archived and recorded in <strong>Receivables (A/R) History</strong>.
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setFilterView((v) => (v === "active" ? "all" : "active"))}
+            >
+              {filterView === "active" ? `Show all (${invoices.length})` : `Show active only (${openInvoices.length})`}
+            </Button>
+            <Link
+              to="/app/receivables"
+              className="inline-flex items-center gap-1 font-medium text-primary hover:underline text-xs"
+            >
+              Go to Receivables History <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+        </div>
+      )}
+
       <Card className="p-0 overflow-hidden">
-        {invoices.length === 0 ? (
-          <div className="p-12 text-center text-sm text-muted-foreground">No invoices yet.</div>
+        {displayedInvoices.length === 0 ? (
+          <div className="p-12 text-center text-sm text-muted-foreground">
+            {paidInvoices.length > 0 && filterView === "active" ? (
+              <div className="space-y-3">
+                <CheckCircle2 className="h-10 w-10 mx-auto text-success" />
+                <div className="text-base font-semibold text-foreground">All receivables are completely paid!</div>
+                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                  There are no outstanding invoices. All {paidInvoices.length} settled receivables are recorded in Receivables History.
+                </p>
+                <div className="flex justify-center gap-2 pt-2">
+                  <Link to="/app/receivables">
+                    <Button variant="outline" size="sm">
+                      View Receivables History
+                    </Button>
+                  </Link>
+                  <Button variant="ghost" size="sm" onClick={() => setFilterView("all")}>
+                    Show all invoices ({invoices.length})
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              "No invoices yet."
+            )}
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-muted-foreground text-left">
@@ -374,7 +450,7 @@ function InvoicesPage() {
               </tr>
             </thead>
             <tbody>
-              {invoices.map((i) => {
+              {displayedInvoices.map((i) => {
                 const remaining = Number(i.total) - Number(i.amount_paid);
                 const canPay = remaining > 0.005;
                 const hasPaid = Number(i.amount_paid) > 0;

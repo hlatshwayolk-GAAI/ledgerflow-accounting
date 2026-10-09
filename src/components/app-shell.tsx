@@ -18,6 +18,9 @@ import {
   Scroll,
   TrendingUp,
   TrendingDown,
+  Settings,
+  Scale,
+  Calculator,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -41,12 +44,15 @@ const navItems = [
   { to: "/app/bills", label: "Bills", icon: Receipt },
   { to: "/app/receivables", label: "Receivables (A/R)", icon: TrendingUp },
   { to: "/app/payables", label: "Payables (A/P)", icon: TrendingDown },
+  { to: "/app/income-tax", label: "Income Tax (CIT)", icon: Scale },
+  { to: "/app/depreciation", label: "Asset Depreciation", icon: Calculator },
   { to: "/app/customers", label: "Customers", icon: Users },
   { to: "/app/suppliers", label: "Suppliers", icon: Truck },
   { to: "/app/bank", label: "Banking & Reconcile", icon: Landmark },
   { to: "/app/reports", label: "Financial Reports", icon: BarChart3 },
   { to: "/app/accounts", label: "Chart of Accounts", icon: BookOpen },
   { to: "/app/journals", label: "Journal Entries", icon: Scroll },
+  { to: "/app/settings", label: "Company Settings", icon: Settings },
 ];
 
 /* ─── Loading skeleton ──────────────────────────────────────────────── */
@@ -141,16 +147,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
+          <DropdownMenuContent align="start" className="w-60">
             <DropdownMenuLabel>Companies</DropdownMenuLabel>
             {companies.map((c) => (
-              <DropdownMenuItem key={c.id} onClick={() => { setActiveCompanyId(c.id); reload(); }}>
-                {c.name}
+              <DropdownMenuItem key={c.id} onClick={() => { setActiveCompanyId(c.id); reload(); }} className="justify-between">
+                <span className="truncate">{c.name}</span>
+                {c.id === active?.id && (
+                  <span className="text-[10px] font-semibold text-primary uppercase ml-2">Active</span>
+                )}
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => { setCreating(true); navigate({ to: "/app/onboarding" }); }}>
               <Plus className="h-4 w-4 mr-2" /> New company
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate({ to: "/app/settings" })}>
+              <Settings className="h-4 w-4 mr-2" /> Manage / Delete companies
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

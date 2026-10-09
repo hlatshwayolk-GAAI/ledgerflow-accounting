@@ -6,6 +6,217 @@ export interface JournalLineInput {
   account_id: string;
   debit: number;
   credit: number;
+  linkedDocument?: {
+    type: "invoice" | "bill";
+    id: string;
+    number: string;
+    entityName: string;
+    outstanding: number;
+  } | null;
+}
+
+/**
+ * Create a manual journal entry with validation that debits == credits.
+ * Automatically applies payment impact to any linked invoice or bill.
+ */
+export async function createManualJournal(
+  companyId: string,
+  entryDate: string,
+  description: string,
+  reference: string | null,
+  lines: JournalLineInput[]
+) {
+  const totalDebit = lines.reduce((s, l) => s + (l.debit || 0), 0);
+  const totalCredit = lines.reduce((s, l) => s + (l.credit || 0), 0);
+
+  if (Math.abs(totalDebit - totalCredit) > 0.005) {
+    throw new Error(`Journal is not balanced. Debits: ${totalDebit.toFixed(2)}, Credits: ${totalCredit.toFixed(2)}`);
+  }
+
+  if (totalDebit === 0) {
+    throw new Error("Journal entry must have at least one non-zero amount");
+  }
+
+  const descriptionWithRef = reference?.trim() ? `${description.trim()} [Ref: ${reference.trim()}]` : description.trim();
+
+  // Find any linked invoice or bill from lines
+  const linkedInvoiceLine = lines.find((l) => l.linkedDocument?.type === "invoice");
+  const linkedBillLine = lines.find((l) => l.linkedDocument?.type === "bill");
+
+  const sourceType = linkedInvoiceLine ? "invoice_payment" : linkedBillLine ? "bill_payment" : "manual";
+  const sourceId = linkedInvoiceLine ? linkedInvoiceLine.linkedDocument?.id : linkedBillLine ? linkedBillLine.linkedDocument?.id : null;
+
+  if (isDemoMode()) {
+    const storedJournals = JSON.parse(localStorage.getItem("ledgerflow.demo_journals") || "[]");
+    const storedAccounts = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
+    const journalId = `demo-jrn-${Date.now()}`;
+
+    const jLines = lines.map((l) => {
+      const acc = storedAccounts.find((a: any) => a.id === l.account_id);
+      return {
+        account_id: l.account_id,
+        debit: l.debit || 0,
+        credit: l.credit || 0,
+        account: acc ? { code: acc.code, name: acc.name } : null,
+      };
+    });
+
+    storedJournals.unshift({
+      id: journalId,
+      company_id: companyId,
+      entry_date: entryDate,
+      description: descriptionWithRef,
+      source_type: sourceType,
+      source_id: sourceId,
+      created_at: new Date().toISOString(),
+      journal_lines: jLines,
+    });
+    localStorage.setItem("ledgerflow.demo_journals", JSON.stringify(storedJournals));
+
+    // Update all linked demo invoices and bills
+    for (const l of lines) {
+      if (!l.linkedDocument) continue;
+
+      if (l.linkedDocument.type === "invoice") {
+        const invId = l.linkedDocument.id;
+        const amount = Math.max(l.credit || 0, l.debit || 0);
+        if (amount > 0) {
+          const storedInvoices = JSON.parse(localStorage.getItem("ledgerflow.demo_invoices") || "[]");
+          const invIndex = storedInvoices.findIndex((i: any) => i.id === invId);
+          if (invIndex !== -1) {
+            const inv = storedInvoices[invIndex];
+            const newPaid = Math.min(Number(inv.total), Number(inv.amount_paid || 0) + amount);
+            const newStatus = newPaid >= Number(inv.total) - 0.01 ? "paid" : "partially_paid";
+            inv.amount_paid = newPaid;
+            inv.status = newStatus;
+            storedInvoices[invIndex] = inv;
+            localStorage.setItem("ledgerflow.demo_invoices", JSON.stringify(storedInvoices));
+          }
+        }
+      } else if (l.linkedDocument.type === "bill") {
+        const billId = l.linkedDocument.id;
+        const amount = Math.max(l.debit || 0, l.credit || 0);
+        if (amount > 0) {
+          const storedBills = JSON.parse(localStorage.getItem("ledgerflow.demo_bills") || "[]");
+          const billIndex = storedBills.findIndex((b: any) => b.id === billId);
+          if (billIndex !== -1) {
+            const b = storedBills[billIndex];
+            const newPaid = Math.min(Number(b.total), Number(b.amount_paid || 0) + amount);
+            const newStatus = newPaid >= Number(b.total) - 0.01 ? "paid" : "partially_paid";
+            b.amount_paid = newPaid;
+            b.status = newStatus;
+            storedBills[billIndex] = b;
+            localStorage.setItem("ledgerflow.demo_bills", JSON.stringify(storedBills));
+          }
+        }
+      }
+    }
+
+    return journalId;
+  }
+
+  // ── LIVE MODE SUPABASE ──
+  try {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc("create_manual_journal" as any, {
+      _company_id: companyId,
+      _entry_date: entryDate,
+      _description: descriptionWithRef,
+      _lines: lines.map((l) => ({ account_id: l.account_id, debit: l.debit || 0, credit: l.credit || 0 })),
+    });
+    if (!rpcErr && rpcData) {
+      await updateLinkedDocsLive(lines);
+      return rpcData;
+    }
+  } catch (e) {
+    console.warn("create_manual_journal RPC unavailable, using client fallback:", e);
+  }
+
+  const { data: journal, error: jErr } = await supabase
+    .from("journals")
+    .insert({
+      company_id: companyId,
+      entry_date: entryDate,
+      description: descriptionWithRef,
+      source_type: sourceType,
+      source_id: sourceId,
+    })
+    .select("id")
+    .single();
+
+  if (jErr || !journal) throw new Error(jErr?.message || "Failed to post manual journal header");
+
+  const linesToInsert = lines
+    .filter((l) => (l.debit || 0) > 0 || (l.credit || 0) > 0)
+    .map((l) => ({
+      journal_id: journal.id,
+      account_id: l.account_id,
+      debit: l.debit || 0,
+      credit: l.credit || 0,
+    }));
+
+  const { error: linesErr } = await supabase.from("journal_lines").insert(linesToInsert);
+  if (linesErr) {
+    await supabase.from("journals").delete().eq("id", journal.id);
+    throw new Error(linesErr.message || "Failed to post manual journal lines");
+  }
+
+  await updateLinkedDocsLive(lines);
+
+  return journal.id;
+}
+
+async function updateLinkedDocsLive(lines: JournalLineInput[]) {
+  for (const l of lines) {
+    if (!l.linkedDocument) continue;
+
+    if (l.linkedDocument.type === "invoice") {
+      const invId = l.linkedDocument.id;
+      const amount = Math.max(l.credit || 0, l.debit || 0);
+      if (amount > 0) {
+        try {
+          const { data: inv } = await supabase
+            .from("invoices")
+            .select("total, amount_paid, status")
+            .eq("id", invId)
+            .single();
+
+          if (inv) {
+            const newPaid = Math.min(Number(inv.total), Number(inv.amount_paid || 0) + amount);
+            const newStatus = newPaid >= Number(inv.total) - 0.01 ? "paid" : "partially_paid";
+            await supabase
+              .from("invoices")
+              .update({ amount_paid: newPaid, status: newStatus as any, updated_at: new Date().toISOString() })
+              .eq("id", invId);
+          }
+        } catch (err) {
+          console.warn("Could not update linked invoice status:", err);
+        }
+      }
+    } else if (l.linkedDocument.type === "bill") {
+      const billId = l.linkedDocument.id;
+      const amount = Math.max(l.debit || 0, l.credit || 0);
+      if (amount > 0) {
+        try {
+          const { data: b } = await supabase
+            .from("bills" as any)
+            .select("total, amount_paid, status")
+            .eq("id", billId)
+            .single();
+
+          if (b) {
+            const newPaid = Math.min(Number(b.total), Number(b.amount_paid || 0) + amount);
+            const newStatus = newPaid >= Number(b.total) - 0.01 ? "paid" : "partially_paid";
+            await supabase
+              .from("bills" as any)
+              .update({ amount_paid: newPaid, status: newStatus as any, updated_at: new Date().toISOString() })
+              .eq("id", billId);
+          }
+        } catch (err) {
+          console.warn("Could not update linked bill status:", err);
+        }
+      }
+    }
+  }
 }
 
 export interface InvoiceLineInput {
@@ -864,98 +1075,4 @@ export async function reverseBillPayment(billId: string) {
   else if (newPaid > 0) newStatus = "partially_paid";
 
   await supabase.from("bills" as any).update({ amount_paid: newPaid, status: newStatus as any, updated_at: new Date().toISOString() }).eq("id", billId);
-}
-
-/**
- * Create a manual journal entry with validation that debits == credits
- */
-export async function createManualJournal(
-  companyId: string,
-  entryDate: string,
-  description: string,
-  reference: string | null,
-  lines: JournalLineInput[]
-) {
-  const totalDebit = lines.reduce((s, l) => s + (l.debit || 0), 0);
-  const totalCredit = lines.reduce((s, l) => s + (l.credit || 0), 0);
-
-  if (Math.abs(totalDebit - totalCredit) > 0.005) {
-    throw new Error(`Journal is not balanced. Debits: ${totalDebit.toFixed(2)}, Credits: ${totalCredit.toFixed(2)}`);
-  }
-
-  if (totalDebit === 0) {
-    throw new Error("Journal entry must have at least one non-zero amount");
-  }
-
-  const descriptionWithRef = reference?.trim() ? `${description.trim()} [Ref: ${reference.trim()}]` : description.trim();
-
-  if (isDemoMode()) {
-    const storedJournals = JSON.parse(localStorage.getItem("ledgerflow.demo_journals") || "[]");
-    const storedAccounts = JSON.parse(localStorage.getItem("ledgerflow.demo_accounts") || "[]");
-    const journalId = `demo-jrn-${Date.now()}`;
-
-    const jLines = lines.map((l) => {
-      const acc = storedAccounts.find((a: any) => a.id === l.account_id);
-      return {
-        account_id: l.account_id,
-        debit: l.debit || 0,
-        credit: l.credit || 0,
-        account: acc ? { code: acc.code, name: acc.name } : null,
-      };
-    });
-
-    storedJournals.unshift({
-      id: journalId,
-      company_id: companyId,
-      entry_date: entryDate,
-      description: descriptionWithRef,
-      source_type: "manual",
-      created_at: new Date().toISOString(),
-      journal_lines: jLines,
-    });
-    localStorage.setItem("ledgerflow.demo_journals", JSON.stringify(storedJournals));
-    return journalId;
-  }
-
-  try {
-    const { data: rpcData, error: rpcErr } = await supabase.rpc("create_manual_journal" as any, {
-      _company_id: companyId,
-      _entry_date: entryDate,
-      _description: descriptionWithRef,
-      _lines: lines.map((l) => ({ account_id: l.account_id, debit: l.debit || 0, credit: l.credit || 0 })),
-    });
-    if (!rpcErr && rpcData) return rpcData;
-  } catch (e) {
-    console.warn("create_manual_journal RPC unavailable, using client fallback:", e);
-  }
-
-  const { data: journal, error: jErr } = await supabase
-    .from("journals")
-    .insert({
-      company_id: companyId,
-      entry_date: entryDate,
-      description: descriptionWithRef,
-      source_type: "manual",
-    })
-    .select("id")
-    .single();
-
-  if (jErr || !journal) throw new Error(jErr?.message || "Failed to post manual journal header");
-
-  const linesToInsert = lines
-    .filter((l) => (l.debit || 0) > 0 || (l.credit || 0) > 0)
-    .map((l) => ({
-      journal_id: journal.id,
-      account_id: l.account_id,
-      debit: l.debit || 0,
-      credit: l.credit || 0,
-    }));
-
-  const { error: linesErr } = await supabase.from("journal_lines").insert(linesToInsert);
-  if (linesErr) {
-    await supabase.from("journals").delete().eq("id", journal.id);
-    throw new Error(linesErr.message || "Failed to post manual journal lines");
-  }
-
-  return journal.id;
 }

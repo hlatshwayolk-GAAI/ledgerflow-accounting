@@ -13,12 +13,15 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppSuppliersRouteImport } from './routes/app.suppliers'
+import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppReceivablesRouteImport } from './routes/app.receivables'
 import { Route as AppPayablesRouteImport } from './routes/app.payables'
 import { Route as AppOnboardingRouteImport } from './routes/app.onboarding'
 import { Route as AppJournalsRouteImport } from './routes/app.journals'
 import { Route as AppInvoicesRouteImport } from './routes/app.invoices'
+import { Route as AppIncomeTaxRouteImport } from './routes/app.income-tax'
+import { Route as AppDepreciationRouteImport } from './routes/app.depreciation'
 import { Route as AppDashboardRouteImport } from './routes/app.dashboard'
 import { Route as AppCustomersRouteImport } from './routes/app.customers'
 import { Route as AppBillsRouteImport } from './routes/app.bills'
@@ -43,6 +46,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppSuppliersRoute = AppSuppliersRouteImport.update({
   id: '/suppliers',
   path: '/suppliers',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
 const AppReportsRoute = AppReportsRouteImport.update({
@@ -73,6 +81,16 @@ const AppJournalsRoute = AppJournalsRouteImport.update({
 const AppInvoicesRoute = AppInvoicesRouteImport.update({
   id: '/invoices',
   path: '/invoices',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppIncomeTaxRoute = AppIncomeTaxRouteImport.update({
+  id: '/income-tax',
+  path: '/income-tax',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDepreciationRoute = AppDepreciationRouteImport.update({
+  id: '/depreciation',
+  path: '/depreciation',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
@@ -110,12 +128,15 @@ export interface FileRoutesByFullPath {
   '/app/bills': typeof AppBillsRoute
   '/app/customers': typeof AppCustomersRoute
   '/app/dashboard': typeof AppDashboardRoute
+  '/app/depreciation': typeof AppDepreciationRoute
+  '/app/income-tax': typeof AppIncomeTaxRoute
   '/app/invoices': typeof AppInvoicesRoute
   '/app/journals': typeof AppJournalsRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/payables': typeof AppPayablesRoute
   '/app/receivables': typeof AppReceivablesRoute
   '/app/reports': typeof AppReportsRoute
+  '/app/settings': typeof AppSettingsRoute
   '/app/suppliers': typeof AppSuppliersRoute
 }
 export interface FileRoutesByTo {
@@ -127,12 +148,15 @@ export interface FileRoutesByTo {
   '/app/bills': typeof AppBillsRoute
   '/app/customers': typeof AppCustomersRoute
   '/app/dashboard': typeof AppDashboardRoute
+  '/app/depreciation': typeof AppDepreciationRoute
+  '/app/income-tax': typeof AppIncomeTaxRoute
   '/app/invoices': typeof AppInvoicesRoute
   '/app/journals': typeof AppJournalsRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/payables': typeof AppPayablesRoute
   '/app/receivables': typeof AppReceivablesRoute
   '/app/reports': typeof AppReportsRoute
+  '/app/settings': typeof AppSettingsRoute
   '/app/suppliers': typeof AppSuppliersRoute
 }
 export interface FileRoutesById {
@@ -145,12 +169,15 @@ export interface FileRoutesById {
   '/app/bills': typeof AppBillsRoute
   '/app/customers': typeof AppCustomersRoute
   '/app/dashboard': typeof AppDashboardRoute
+  '/app/depreciation': typeof AppDepreciationRoute
+  '/app/income-tax': typeof AppIncomeTaxRoute
   '/app/invoices': typeof AppInvoicesRoute
   '/app/journals': typeof AppJournalsRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/payables': typeof AppPayablesRoute
   '/app/receivables': typeof AppReceivablesRoute
   '/app/reports': typeof AppReportsRoute
+  '/app/settings': typeof AppSettingsRoute
   '/app/suppliers': typeof AppSuppliersRoute
 }
 export interface FileRouteTypes {
@@ -164,12 +191,15 @@ export interface FileRouteTypes {
     | '/app/bills'
     | '/app/customers'
     | '/app/dashboard'
+    | '/app/depreciation'
+    | '/app/income-tax'
     | '/app/invoices'
     | '/app/journals'
     | '/app/onboarding'
     | '/app/payables'
     | '/app/receivables'
     | '/app/reports'
+    | '/app/settings'
     | '/app/suppliers'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -181,12 +211,15 @@ export interface FileRouteTypes {
     | '/app/bills'
     | '/app/customers'
     | '/app/dashboard'
+    | '/app/depreciation'
+    | '/app/income-tax'
     | '/app/invoices'
     | '/app/journals'
     | '/app/onboarding'
     | '/app/payables'
     | '/app/receivables'
     | '/app/reports'
+    | '/app/settings'
     | '/app/suppliers'
   id:
     | '__root__'
@@ -198,12 +231,15 @@ export interface FileRouteTypes {
     | '/app/bills'
     | '/app/customers'
     | '/app/dashboard'
+    | '/app/depreciation'
+    | '/app/income-tax'
     | '/app/invoices'
     | '/app/journals'
     | '/app/onboarding'
     | '/app/payables'
     | '/app/receivables'
     | '/app/reports'
+    | '/app/settings'
     | '/app/suppliers'
   fileRoutesById: FileRoutesById
 }
@@ -241,6 +277,13 @@ declare module '@tanstack/react-router' {
       path: '/suppliers'
       fullPath: '/app/suppliers'
       preLoaderRoute: typeof AppSuppliersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/settings': {
+      id: '/app/settings'
+      path: '/settings'
+      fullPath: '/app/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/reports': {
@@ -283,6 +326,20 @@ declare module '@tanstack/react-router' {
       path: '/invoices'
       fullPath: '/app/invoices'
       preLoaderRoute: typeof AppInvoicesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/income-tax': {
+      id: '/app/income-tax'
+      path: '/income-tax'
+      fullPath: '/app/income-tax'
+      preLoaderRoute: typeof AppIncomeTaxRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/depreciation': {
+      id: '/app/depreciation'
+      path: '/depreciation'
+      fullPath: '/app/depreciation'
+      preLoaderRoute: typeof AppDepreciationRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/dashboard': {
@@ -329,12 +386,15 @@ interface AppRouteChildren {
   AppBillsRoute: typeof AppBillsRoute
   AppCustomersRoute: typeof AppCustomersRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppDepreciationRoute: typeof AppDepreciationRoute
+  AppIncomeTaxRoute: typeof AppIncomeTaxRoute
   AppInvoicesRoute: typeof AppInvoicesRoute
   AppJournalsRoute: typeof AppJournalsRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
   AppPayablesRoute: typeof AppPayablesRoute
   AppReceivablesRoute: typeof AppReceivablesRoute
   AppReportsRoute: typeof AppReportsRoute
+  AppSettingsRoute: typeof AppSettingsRoute
   AppSuppliersRoute: typeof AppSuppliersRoute
 }
 
@@ -344,12 +404,15 @@ const AppRouteChildren: AppRouteChildren = {
   AppBillsRoute: AppBillsRoute,
   AppCustomersRoute: AppCustomersRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppDepreciationRoute: AppDepreciationRoute,
+  AppIncomeTaxRoute: AppIncomeTaxRoute,
   AppInvoicesRoute: AppInvoicesRoute,
   AppJournalsRoute: AppJournalsRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppPayablesRoute: AppPayablesRoute,
   AppReceivablesRoute: AppReceivablesRoute,
   AppReportsRoute: AppReportsRoute,
+  AppSettingsRoute: AppSettingsRoute,
   AppSuppliersRoute: AppSuppliersRoute,
 }
 

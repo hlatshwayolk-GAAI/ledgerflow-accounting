@@ -205,11 +205,18 @@ function ReceivablesPage() {
       i.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
       (i.customer?.name ?? "").toLowerCase().includes(search.toLowerCase());
     const matchesCustomer = customerFilter === "all" || i.customer_id === customerFilter || (i.customer as any)?.id === customerFilter;
+    const isPaid = i.status === "paid" || Math.max(0, i.total - i.amount_paid) <= 0.005;
     const matchesStatus =
       statusFilter === "all"
         ? true
+        : statusFilter === "paid"
+        ? isPaid
         : statusFilter === "overdue"
-        ? i.due_date < today && i.total - i.amount_paid > 0.005
+        ? i.due_date < today && !isPaid
+        : statusFilter === "sent"
+        ? !isPaid && Number(i.amount_paid) === 0
+        : statusFilter === "partially_paid"
+        ? !isPaid && Number(i.amount_paid) > 0
         : i.status === statusFilter;
     return matchesSearch && matchesCustomer && matchesStatus;
   });
